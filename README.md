@@ -4,6 +4,8 @@
 
 Autonomous agents are a machine for turning your bank balance — and your blast radius — into tool calls. OpenClaw hit ~180k stars and then became 2026's first big AI security disaster: one-click RCE, a poisoned skills marketplace, tens of thousands of instances exposed with no auth. **warden is the layer that stops that.**
 
+**warden isn't an AI — it's a deterministic firewall that *guards* AI agents.** Same tool call → same verdict, every time, offline, with no model in the decision path. That's deliberate: a probabilistic (LLM-based) guard can be jailbroken and never answers the same way twice; a deterministic one is reproducible and auditable. (There's an optional LLM judge for gray-zone calls — the only probabilistic part — but it can only *raise* risk, never clear a block.)
+
 It sits between an agent and its tools, and on every action it:
 
 - **classifies risk** — green (read-only) / yellow (reversible) / red (destructive or outward-facing) / black (catastrophic or malicious)
