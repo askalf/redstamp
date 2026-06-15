@@ -26,7 +26,8 @@ export const BLACK_SHELL = [
   { re: /\|\s*crontab\b/i, why: 'installs a crontab (persistence)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b)[^|]*[\\/]etc[\\/](?:cron|systemd)/i, why: 'writes a persistence unit (cron/systemd)' },
-  { re: /\b(?:tar|cat|cp|zip|gzip|scp|rsync)\b[^|]*(?:\.ssh|id_rsa|\.aws|\.env\b|authorized_keys|credentials)[^|]*(?:\||@\S+:|\b(?:nc|ncat|curl|wget)\b)/i, why: 'exfiltrate sensitive files' },
+  { re: /\b(?:tar|cat|cp|zip|gzip|dd)\b[^|]*(?:\.ssh|id_rsa|id_ed25519|\.aws|\.env\b|authorized_keys|credentials)[^|]*\|\s*(?:nc|ncat|curl|wget|socat)\b/i, why: 'pipe sensitive files to the network (exfil)' },
+  { re: /\b(?:scp|rsync)\b(?:\s+-\w+\s+\S+|\s+-\w+)*\s+\S*(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
 ];
 export const RED_SHELL = [
   { re: /\bsudo\b/i, why: 'privilege escalation' },
