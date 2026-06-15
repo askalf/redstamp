@@ -1,15 +1,17 @@
 // Secret/exfil and prompt-injection / poisoned-skill scanners.
 export const SECRET_RE = [
   { re: /sk-ant-[A-Za-z0-9_-]{20,}/, why: 'Anthropic API key' },
-  { re: /sk-[A-Za-z0-9]{20,}/, why: 'OpenAI-style API key' },
+  { re: /sk-(?:proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{40,})/, why: 'OpenAI-style API key' }, // tightened: real keys are sk-proj-… or sk-<40+>; avoids flagging benign sk-<20> identifiers
   { re: /ghp_[A-Za-z0-9]{30,}/, why: 'GitHub PAT' },
   { re: /AKIA[0-9A-Z]{16}/, why: 'AWS access key id' },
   { re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, why: 'private key' },
   { re: /xox[baprs]-[A-Za-z0-9-]{10,}/, why: 'Slack token' },
 ];
 export const SECRET_ENV_RE = /\$\{?\w*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\w*\}?/i;
-export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json)/i;
-export const METADATA_RE = /\b(?:169\.254\.169\.254|metadata\.google\.internal|metadata\.azure\.com|fd00:ec2::254|100\.100\.100\.200)\b/i;
+export const SENSITIVE_PATH_RE = /(\.env\b|\.aws[\\/]|\.ssh[\\/]|\.npmrc|credentials\.json|\.git-credentials|\.kube[\\/]config|[\\/]\.claude[\\/]|[\\/]\.askalf[\\/]|[\\/](?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker[\\/]config\.json|\.netrc\b|[\\/]gh[\\/]hosts\.yml|[\\/]gcloud[\\/]|[\\/]\.azure[\\/]|serviceaccount[\\/]token|\.pgpass\b|rclone\.conf|credentials\.tfrc)/i;
+// Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
+// IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
+export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?fd00:ec2::254\]?/i;
 export const PERSISTENCE_PATH_RE = /(authorized_keys|[\\/]etc[\\/]cron|[\\/]etc[\\/]systemd[\\/]system|CurrentVersion[\\/]+Run|[\\/]Startup[\\/])/i;
 export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
@@ -24,15 +26,43 @@ export const INJECTION_RE = [
 ];
 export const URL_RE = /https?:\/\/([^\/\s'"]+)/gi;
 
+// JSON.stringify that never throws (circular refs, BigInt, etc.) — a firewall
+// must fail safe on malformed input, not throw into the host agent.
+export function safeStringify(v) {
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(v, (_k, val) => {
+      if (val && typeof val === 'object') { if (seen.has(val)) return '[circular]'; seen.add(val); }
+      return typeof val === 'bigint' ? val.toString() : val;
+    }) ?? '';
+  } catch { try { return String(v); } catch { return ''; } }
+}
+
+// Is `host` a destination OUTSIDE this machine/allowlist? Parses out userinfo
+// and port and anchors loopback/private ranges, so `localhost.attacker.com`,
+// `127.0.0.1.evil.com`, and `[2001:db8::1]` are correctly treated as EXTERNAL
+// (the old prefix test let them masquerade as internal → exfil bypass).
 export function isExternal(host, allow = []) {
   if (!host) return false;
-  const h = host.toLowerCase();
-  if (/^(localhost|127\.|0\.0\.0\.0|::1|\[)/.test(h)) return false;
-  return !allow.some((d) => h === d || h.endsWith('.' + d));
+  let h = String(host).toLowerCase().trim();
+  const at = h.lastIndexOf('@'); if (at >= 0) h = h.slice(at + 1);   // strip user:pass@
+  h = h.replace(/^\[([^\]]*)\](?::\d+)?$/, '$1');                     // strip brackets (+ port) from [v6]:port
+  if (/^[^:]+:\d+$/.test(h)) h = h.replace(/:\d+$/, '');              // strip host:port — but NOT a bare IPv6's colons
+  // genuine loopback / unspecified / RFC1918 / link-local → internal
+  if (h === 'localhost' || h.endsWith('.localhost')) return false;   // .localhost always resolves to loopback (RFC 6761)
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return false;
+  if (h === '0.0.0.0' || h === '::1' || h === '::') return false;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return false;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return false;
+  if (/^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(h)) return false;
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return false;          // link-local
+  if (/^(?:fe80:|fc00:|fd[0-9a-f]{2}:)/.test(h)) return false;        // IPv6 link-local / ULA
+  if (allow.some((d) => h === d.toLowerCase() || h.endsWith('.' + d.toLowerCase()))) return false;
+  return true;
 }
 
 export function scanSecrets(action) {
-  const text = JSON.stringify(action.input || {});
+  const text = safeStringify(action.input || {});
   const flags = [];
   for (const s of SECRET_RE) if (s.re.test(text)) flags.push(s.why);
   if (SECRET_ENV_RE.test(text)) flags.push('reads a secret env var');
@@ -46,7 +76,7 @@ export function injectionHits(text = '') {
 }
 
 export function scanInjection(action, skillText = '') {
-  return injectionHits(JSON.stringify(action.input || {}) + ' ' + skillText);
+  return injectionHits(safeStringify(action.input || {}) + ' ' + skillText);
 }
 
 // Obfuscation / evasion *smells* — NOT detections. Regex can't safely decide

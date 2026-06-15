@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
-import { scanSecrets, injectionHits, obfuscationHits, isExternal, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
+import { scanSecrets, injectionHits, obfuscationHits, isExternal, safeStringify, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
 
@@ -31,18 +31,25 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // injection patterns in passive file content are flagged red (it's data, not execution).
   const injSkill = injectionHits(skillText || '');
   if (injSkill.length) { tier = TIER.BLACK; why.push(...injSkill.map((f) => '☠ poisoned-skill: ' + f)); }
-  const injInput = injectionHits(JSON.stringify(action.input || {}));
+  // Injection scanning targets DATA the agent consumes (skill text, file content,
+  // request bodies) — NOT shell-command args. A human running `echo "ignore all
+  // previous instructions"` or `grep "you are now in developer mode"` is benign;
+  // shell threats are the classifier's job. Scanning command text for injection
+  // English only false-blocks legitimate work, so skip it for shell tools.
+  const inputStr = safeStringify(action.input || {});
+  const injInput = SHELL.includes(tool) ? [] : injectionHits(inputStr);
   if (injInput.length) { const it = active ? TIER.BLACK : TIER.RED; tier = worst(tier, it); why.push(...injInput.map((f) => (active ? '☠' : '⚠') + ' injection: ' + f)); }
   // cloud-metadata SSRF (steals instance credentials) — only meaningful for tools that fetch/exec.
-  if (active && METADATA_RE.test(JSON.stringify(action.input || {}))) { tier = TIER.BLACK; why.push('☠ cloud-metadata SSRF (credential theft)'); }
+  if (active && METADATA_RE.test(inputStr)) { tier = TIER.BLACK; why.push('☠ cloud-metadata SSRF (credential theft)'); }
   // persistence/backdoor: writing into a known persistence location.
-  if (WRITE.includes(tool) && PERSISTENCE_PATH_RE.test(action.input?.path || '')) { tier = TIER.BLACK; why.push('☠ persistence target: ' + (action.input?.path || '')); }
+  const wpath = String(action.input?.path || '');
+  if (WRITE.includes(tool) && PERSISTENCE_PATH_RE.test(wpath)) { tier = TIER.BLACK; why.push('☠ persistence target: ' + wpath); }
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
   }
   if (writeRoots && WRITE.includes(tool)) {
-    const p = action.input?.path || '';
+    const p = String(action.input?.path || '');
     if (p && !writeRoots.some((r) => p.startsWith(r))) {
       tier = worst(tier, TIER.RED);
       why.push('⚠ write outside allowed roots: ' + p);
@@ -55,7 +62,8 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // judge it gets deobfuscated. This is how the evasion bucket reaches the judge.
   let smells = [];
   if (SHELL.includes(tool) && tier !== TIER.BLACK) {
-    smells = obfuscationHits(action.input?.command || action.input?.cmd || '');
+    const c = action.input?.command ?? action.input?.cmd;
+    smells = obfuscationHits(typeof c === 'string' ? c : inputStr);
     if (smells.length) why.push(...smells.map((f) => '· obfuscation smell → judge: ' + f));
   }
 

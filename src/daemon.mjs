@@ -44,8 +44,10 @@ export function startDaemon({
 
   const onConnection = (sock) => {
     let buf = '';
+    sock.setTimeout(30000, () => sock.destroy()); // drop idle / half-open connections (handle leak)
     sock.on('data', async (d) => {
       buf += d.toString();
+      if (buf.length > 1 << 20) { sock.destroy(); return; } // 1 MB cap — a client that never sends \n can't OOM the daemon
       let i;
       while ((i = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, i); buf = buf.slice(i + 1);
@@ -116,7 +118,7 @@ export function startDaemon({
     close(cb) {
       let n = tcpServer ? 2 : 1;
       const done = () => { if (--n <= 0 && cb) cb(); };
-      cleanupInfo();
+      if (tcpServer) cleanupInfo(); // only delete the info file WE wrote — a non-TCP daemon must NOT wipe the live daemon.json
       try { if (watcher) watcher.close(); } catch {}
       try { server.close(done); } catch { done(); }
       if (tcpServer) { try { tcpServer.close(done); } catch { done(); } }

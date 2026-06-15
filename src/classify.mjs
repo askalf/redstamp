@@ -1,4 +1,5 @@
 // Risk classification for agent tool-calls. Deterministic, offline, fast.
+import { safeStringify } from './scan.mjs';
 export const TIER = { GREEN: 'green', YELLOW: 'yellow', RED: 'red', BLACK: 'black' };
 export const ORDER = { green: 0, yellow: 1, red: 2, black: 3 };
 export const worst = (a, b) => (ORDER[a] >= ORDER[b] ? a : b);
@@ -13,7 +14,7 @@ export const BLACK_SHELL = [
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
-  { re: /\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba)?sh\b/i, why: 'pipe remote script to shell (RCE)' },
+  { re: /\b(curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:(?:ba)?sh|zsh|python[0-9.]*|node|ruby|perl|php)\b/i, why: 'pipe remote download to an interpreter (RCE)' },
   { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
@@ -27,7 +28,10 @@ export const BLACK_SHELL = [
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^|]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
   { re: /(?:>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^|]*[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload)' },
   { re: /\b(?:tar|cat|cp|zip|gzip|dd)\b[^|]*(?:\.ssh|id_rsa|id_ed25519|\.aws|\.env\b|authorized_keys|credentials)[^|]*\|\s*(?:nc|ncat|curl|wget|socat)\b/i, why: 'pipe sensitive files to the network (exfil)' },
-  { re: /\b(?:scp|rsync)\b(?:\s+-\w+\s+\S+|\s+-\w+)*\s+\S*(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b|[\\/]\.ssh\b|[\\/]\.gnupg\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
+  // linear (no nested quantifier → no ReDoS); [^|@]*? before the secret means no
+  // earlier @host: dest, and the secret must sit immediately before the dest —
+  // so `scp -i ~/.ssh/key dist.tar deploy@host:` (key is auth, not source) stays clean.
+  { re: /\b(?:scp|rsync)\b[^|@]*?(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b|[\\/]\.ssh\b|[\\/]\.gnupg\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
   { re: /\bcurl\b[^|]*\s-(?:F|T|d|-form|-upload-file|-data(?:-binary)?)\b[^|]*(?:@?\/etc\/(?:passwd|shadow)|id_rsa|id_ed25519|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|\.pem\b)/i, why: 'uploads a sensitive file via curl (exfil)' },
   { re: /\bwget\b[^|]*--post-file=[^|]*(?:\/etc\/(?:passwd|shadow)|id_rsa|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|credentials)/i, why: 'uploads a sensitive file via wget (exfil)' },
   { re: /\breg\s+add\b[^|]*(?:CurrentVersion[\\/]+Run|Image\s+File\s+Execution)/i, why: 'registry Run-key persistence' },
@@ -53,6 +57,13 @@ export const BLACK_SHELL = [
   { re: /(?:\b(?:ba)?sh\b|\bsource\b|(?:^|[;&|])\s*\.)\s*[^|]*<\(\s*(?:curl|wget)\b/i, why: 'process-substitution remote exec (RCE)' },
   { re: /\b(?:ba)?sh\b\s+-c\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'sh -c of remote download (RCE)' },
   { re: /\bpython[0-9.]*\b\s+-c\b(?=[^|]*\b(?:urlopen|urlretrieve|requests\.get)\b)(?=[^|]*\b(?:exec|eval|os\.system|subprocess|popen)\b)/i, why: 'python download-and-exec (RCE)' },
+  // staged download-then-execute (two-step, not a single pipe)
+  { re: /\b(?:curl|wget)\b[^|]*?\s-o\b[^|]*?[;&][^|]*?\b(?:bash|sh|zsh|source)\b/i, why: 'staged download-then-execute (RCE)' },
+  { re: /\b(?:curl|wget)\b[^|]*?&&[^|]*?\bchmod\s+\+x\b/i, why: 'download + make-executable (staged RCE)' },
+  // git config-override / transport RCE (sshCommand, fsmonitor, pager, ext::)
+  { re: /\bgit\b[^|]*\s-c\s+(?:core\.(?:sshCommand|pager|fsmonitor|hooksPath)|gpg\.program)\s*=/i, why: 'git -c config-override RCE' },
+  { re: /\bgit\s+config\b[^|]*\bcore\.(?:sshCommand|fsmonitor|pager|hooksPath)\b/i, why: 'git config core.* RCE override' },
+  { re: /\bgit\b[^|]*\bext::/i, why: 'git ext:: transport RCE' },
   // --- reverse shells (more) ---
   { re: /\bsocat\b[^|]*\bEXEC:/i, why: 'socat reverse shell (EXEC)' },
   { re: /\bmkfifo\b[\s\S]*\|\s*n(?:c|cat)\b/i, why: 'named-pipe reverse shell (mkfifo|nc)' },
@@ -92,6 +103,7 @@ export const RED_SHELL = [
   { re: /(?<![-\w])rm\s+\S/i, why: 'file deletion' },
   { re: /\bgit\s+push\b/i, why: 'outward-facing: pushes code' },
   { re: /\b(npm|pnpm|yarn|pip|apt|brew|choco)\s+(i|install|add)\b/i, why: 'installs packages (supply-chain)' },
+  { re: /\b(?:npx|pnpm\s+dlx|yarn\s+dlx|bunx|uvx|pipx\s+run)\b/i, why: 'runs an arbitrary remote package (npx/uvx)' },
   { re: /\b(kill|pkill|taskkill)\b/i, why: 'kills processes' },
   { re: /\b(systemctl|service)\s+(stop|disable|mask)\b/i, why: 'disables services' },
   { re: /\b(?:kubectl\s+delete|terraform\s+destroy|aws\s+s3\s+rm\b[^|]*--recursive|docker\s+(?:rm|rmi)\s+-f|helm\s+(?:delete|uninstall))\b/i, why: 'destructive infrastructure operation' },
@@ -115,7 +127,14 @@ export function classify(action) {
   let tier = TIER.GREEN;
 
   if (SHELL.includes(tool)) {
-    const cmd = input.command || input.cmd || JSON.stringify(input);
+    const raw = input.command ?? input.cmd;
+    // non-string command must NOT coerce to "[object Object]"/"rm,-rf,/" (silent
+    // green bypass). Join argv arrays with spaces so a split command is visible;
+    // stringify other shapes so nested dangerous strings stay visible.
+    const cmd = typeof raw === 'string' ? raw
+      : Array.isArray(raw) ? raw.map(String).join(' ')
+      : safeStringify(input);
+    if (cmd.length > 16384) { why.push('⚠ oversized command (' + cmd.length + 'B) — gated for review'); return { tier: TIER.RED, why }; }
     for (const p of BLACK_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
     for (const p of RED_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
     for (const p of YELLOW_SHELL) if (p.re.test(cmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
