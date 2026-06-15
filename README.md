@@ -71,6 +71,8 @@ const judge = makeJudge({ endpoint: 'http://localhost:3456' }); // routes throug
 const v = await checkAsync(action, policy, { judge });
 ```
 
+The judge sits **behind** the deterministic gate and can only **raise** risk, never lower it. It's consulted for gray-zone verdicts and — via the **obfuscation router** — for commands that *smell* evasive (`X=rm; $X -rf /`, `rm${IFS}-rf${IFS}/`, hex-piped-to-sh) that regex can't safely judge without overfitting. The router marks them gray **without** changing the deterministic verdict, so with no judge they still pass (no false block); with a judge they get deobfuscated and blocked. Enable it live on the daemon with `WARDEN_JUDGE_ENDPOINT` (+ `WARDEN_JUDGE_KEY` if your endpoint needs one); see `node bench/judge-demo.mjs`.
+
 ## CLI
 
 ```bash

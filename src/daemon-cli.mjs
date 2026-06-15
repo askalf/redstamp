@@ -6,10 +6,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { startDaemon } from './daemon.mjs';
 import { wardenSocket, wardenInfoFile } from './client.mjs';
+import { makeJudge } from './judge.mjs';
 
 const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 const configPath = process.env.WARDEN_CONFIG || path.join(HOME, '.warden', 'config.json');
 const auditPath = process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.jsonl');
+
+// Opt-in LLM judge tier: set WARDEN_JUDGE_ENDPOINT (e.g. an in-stack dario) to
+// have the daemon deobfuscate gray-zone / evasion-bucket commands. No endpoint
+// -> deterministic only (unchanged). Catches the regex-evasion the gate can't.
+const judge = process.env.WARDEN_JUDGE_ENDPOINT
+  ? makeJudge({
+      endpoint: process.env.WARDEN_JUDGE_ENDPOINT,
+      model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
+      apiKey: process.env.WARDEN_JUDGE_KEY || process.env.DARIO_API_KEY || 'dario',
+    })
+  : null;
 
 // Don't double-start: if a live daemon already published its info file, bail.
 try {
@@ -20,5 +32,5 @@ try {
   }
 } catch {}
 
-startDaemon({ configPath, auditPath, tcp: true, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
-process.stderr.write('[warden] serve on ' + wardenSocket() + ' (+ loopback fast-hook) — Ctrl-C to stop\n');
+startDaemon({ configPath, auditPath, tcp: true, judge, onLog: (m) => process.stderr.write('[warden] ' + m + '\n') });
+process.stderr.write('[warden] serve on ' + wardenSocket() + ' (+ loopback fast-hook)' + (judge ? ' + judge tier → ' + process.env.WARDEN_JUDGE_ENDPOINT : '') + ' — Ctrl-C to stop\n');
