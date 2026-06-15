@@ -39,7 +39,10 @@ export function makeJudge({ endpoint = 'http://localhost:3456', apiKey = process
         }),
       });
       const data = await res.json();
-      const text = (data?.content?.[0]?.text || '').trim();
+      // Concatenate text across ALL content blocks — endpoints with extended
+      // thinking (e.g. dario) emit a thinking block first, so the JSON verdict
+      // is not in content[0]. Reading only content[0].text silently misses it.
+      const text = (Array.isArray(data?.content) ? data.content.map((b) => b?.text || '').join('') : '').trim();
       const m = text.match(/\{[\s\S]*\}/);
       const parsed = m ? JSON.parse(m[0]) : null;
       if (parsed && [TIER.GREEN, TIER.YELLOW, TIER.RED, TIER.BLACK].includes(parsed.tier)) return parsed;

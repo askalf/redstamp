@@ -1,7 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { check, checkAsync } from '../src/index.mjs';
-import { stubJudge } from '../src/judge.mjs';
+import { stubJudge, makeJudge } from '../src/judge.mjs';
+
+test('makeJudge reads the verdict past a thinking block (multi-content)', async () => {
+  const orig = globalThis.fetch;
+  // dario-style response: a thinking block FIRST, then the JSON text block.
+  globalThis.fetch = async () => ({ json: async () => ({ content: [{ type: 'thinking', thinking: 'X=rm so $X is rm…' }, { type: 'text', text: '{"tier":"black","reason":"deobfuscates to rm -rf /"}' }] }) });
+  try {
+    const j = makeJudge({ endpoint: 'http://stub' });
+    const r = await j({ tool: 'shell', input: { command: 'X=rm; $X -rf /' } }, { tier: 'green', why: [] });
+    assert.equal(r.tier, 'black');
+  } finally { globalThis.fetch = orig; }
+});
 
 // The evasion bucket: commands the regex CANNOT catch without overfitting.
 // They must classify clean (allow) deterministically, be flagged gray by the
