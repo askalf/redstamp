@@ -14,13 +14,16 @@ export const BLACK_SHELL = [
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
-  { re: /\b(curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:(?:ba)?sh|zsh|python[0-9.]*|node|ruby|perl|php)\b/i, why: 'pipe remote download to an interpreter (RCE)' },
+  // [^;\n]* (not [^|]*) so a download piped THROUGH filters (tee/gunzip/sed/xxd/
+  // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
+  // staying within one pipeline (no ; to a separate command).
+  { re: /\b(curl|wget)\b[^;\n]*\|\s*(?:sudo\s+)?(?:(?:ba)?sh|zsh|dash|python[0-9.]*|node|ruby|perl|php)\b/i, why: 'pipe remote download to an interpreter (RCE)' },
   { re: /\bchmod\s+-R\s+0?777\s+\//i, why: 'world-writable root' },
   { re: /\bhistory\s+-c\b|\bunset\s+HISTFILE\b|rm\s+[^|]*\.bash_history/i, why: 'covering tracks (history wipe)' },
   { re: /\/dev\/tcp\//i, why: 'reverse shell (/dev/tcp)' },
   { re: /\bn(?:c|cat)\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
   { re: /\beval\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'eval of remote download (RCE)' },
-  { re: /\bbase64\b[^|]*(?:-d|--decode)[^|]*\|\s*(?:ba)?sh\b/i, why: 'base64-decode piped to shell (obfuscated RCE)' },
+  { re: /\bbase64\b[^|]*(?:-d|--decode)[^|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b/i, why: 'base64-decode piped to shell (obfuscated RCE)' },
   { re: /\b(?:python[0-9.]*|perl|ruby|php|node)\b(?=[^|]*\b(?:socket|fsockopen|IO::Socket|Socket::INET)\b)(?=[^|]*\b(?:connect|PeerAddr|exec|system|subprocess|popen|fdopen|spawn|\/bin\/(?:ba)?sh)\b)/i, why: 'interpreter reverse shell' },
   { re: /\b(?:iptables\s+-F|ufw\s+disable|setenforce\s+0)\b/i, why: 'disables host firewall/SELinux' },
   { re: /(?:Set|Add)-MpPreference[^|]*-(?:Disable\w+|ExclusionPath)/i, why: 'disables/evades Microsoft Defender' },
@@ -91,7 +94,7 @@ export const BLACK_SHELL = [
   { re: /\bdocker\s+run\b(?=[^|]*--pid[= ]host\b)(?=[^|]*--privileged\b)/i, why: 'privileged host-pid container (escape)' },
   // --- destructive (more). Drive-root / system targets only; `Remove-Item
   //     node_modules`, `find /tmp -delete`, `> /dev/null` stay clean. ---
-  { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:\s[/~](?:\s|$)|--no-preserve-root|["'\s]\$\{?HOME\b)/i, why: 'recursive force-delete (long flags) of root/home' },
+  { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete (long flags) of root/home/system/glob' },
   { re: /\bfind\s+\/\s+[^|]*-delete\b/i, why: 'find / -delete (mass deletion)' },
   { re: />\s*\/dev\/(?:sd|nvme|hd|disk|vd)[a-z]*\d*\b/i, why: 'overwrites a raw block device' },
   { re: /\bshred\b\s+(?:-\S+\s+)*[\\/](?:etc|boot|dev|var|usr|home|root)\b/i, why: 'shreds a system file' },
@@ -108,6 +111,8 @@ export const RED_SHELL = [
   { re: /\b(kill|pkill|taskkill)\b/i, why: 'kills processes' },
   { re: /\b(systemctl|service)\s+(stop|disable|mask)\b/i, why: 'disables services' },
   { re: /\b(?:kubectl\s+delete|terraform\s+destroy|aws\s+s3\s+rm\b[^|]*--recursive|docker\s+(?:rm|rmi)\s+-f|helm\s+(?:delete|uninstall))\b/i, why: 'destructive infrastructure operation' },
+  { re: /\bterraform\s+apply\b/i, why: 'applies infrastructure changes (terraform)' },
+  { re: /\bgit\s+clean\b[^|]*\s-[a-z]*[fx]/i, why: 'git clean removes untracked/ignored files (irreversible)' },
   { re: /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b/i, why: 'destructive database operation' },
   { re: /\b(?:scp|rsync)\b[^|]*\S+@\S+:/i, why: 'remote file transfer' },
   { re: /\bdocker\s+run\b[^|]*--(?:privileged|pid[= ]host|net[= ]host|cap-add[= ]?SYS_ADMIN)/i, why: 'privileged / host-namespace container' },
@@ -143,6 +148,9 @@ export function neutralizeQuotedData(cmd) {
       out += ch + ((blankNext || grepPending) ? '' : cmd.slice(i + 1, j)) + (closed ? ch : '');
       i = closed ? j + 1 : j; blankNext = false; grepPending = false; continue;
     }
+    // an unquoted `#` at a word boundary starts a shell comment — nothing after
+    // it executes, so drop the rest (`ls # rm -rf /` is data, not a live delete).
+    if (ch === '#' && (out === '' || /\s$/.test(out))) break;
     if (/\s/.test(ch)) { if (tok) onToken(); out += ch; i++; continue; }
     if (ch === '|' || ch === ';' || ch === '&') { tok = ''; blankNext = false; grepPending = false; out += ch; i++; continue; }
     tok += ch; out += ch; i++;
