@@ -22,7 +22,12 @@ First public release on npm — own your agent security.
   hash-chained to disk; `verifyAuditFile()` detects any edit or deletion of a
   past entry.
 - **MCP middleware** (`@askalf/warden/mcp`, `warden-mcp`) — wrap an MCP server
-  to scan its tool list for poisoned descriptions and firewall tool calls.
+  to firewall tool calls, strip poisoned tools from `tools/list`, and neutralize
+  prompt-injection returned in tool *results* (indirect injection). Tool/arg
+  mapping is exfil-aware: a URL-bearing call is risk-checked as a fetch even when
+  the tool is named like a reader, so SSRF / cloud-metadata access can't be
+  hidden behind a benign name. The stdio proxy bounds its line buffer against a
+  hostile peer (`npm run bench:mcp` red-teams all of this).
 - **Claude Code hook** (`warden-hook`) — drop-in pre-tool-use guard.
 - **Daemon + native fast client** (`warden-serve`, `@askalf/warden/client`) —
   a local decision server with a low-latency client for hot paths.
