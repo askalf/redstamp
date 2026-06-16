@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { decide, check, classify } from '../src/index.mjs';
 import { matchRule } from '../src/policy.mjs';
-import { mapMcpToAction, guardMcpCall, scanToolResult } from '../src/mcp.mjs';
+import { mapMcpToAction, guardMcpCall, scanToolResult, scanMcpTools } from '../src/mcp.mjs';
 
 const circular = {}; circular.self = circular;
 const MALFORMED = [
@@ -81,4 +81,9 @@ test('MCP entrypoints never throw on malformed input', () => {
   for (const x of [null, undefined, 10n, Symbol('s'), circular, { content: [{ text: 5 }] }, 'plain string']) {
     assert.doesNotThrow(() => scanToolResult(x), 'scanToolResult threw');
   }
+  // scanMcpTools processes a (possibly hostile) tools/list from an MCP server
+  for (const x of [null, undefined, 'x', 123, [null, undefined, 5], [{ name: 'x', inputSchema: circular }], circular]) {
+    assert.doesNotThrow(() => scanMcpTools(x), 'scanMcpTools threw');
+  }
+  assert.deepEqual(scanMcpTools([null, { name: 'ok', description: 'reads' }]), [], 'null entries are skipped, clean tool yields no finding');
 });

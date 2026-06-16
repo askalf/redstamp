@@ -105,8 +105,11 @@ export function guardHandler(handler, policy, opts = {}) {
  */
 export function scanMcpTools(tools = []) {
   const findings = [];
+  if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
   for (const t of tools) {
-    const text = `${t.name || ''} ${t.description || ''} ${JSON.stringify(t.inputSchema || t.input_schema || {})}`;
+    if (!t || typeof t !== 'object') continue;           // skip null / primitive entries from a hostile server
+    // safeStringify (not JSON.stringify) so a circular/BigInt schema can't throw.
+    const text = `${t.name || ''} ${t.description || ''} ${safeStringify(t.inputSchema || t.input_schema || {})}`;
     const flags = scanInjection({ input: { _scan: text } });
     if (flags.length) findings.push({ tool: t.name, flags });
   }
