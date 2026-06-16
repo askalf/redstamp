@@ -1,0 +1,130 @@
+name: Auto-release
+
+# Triggered when package.json's "version" field changes on master.
+# Tags vX.Y.Z, creates a GitHub release from the matching CHANGELOG
+# section, and runs `npm publish --provenance --access public`.
+#
+# Idempotent — if the tag already exists the job exits cleanly without
+# republishing. Manual re-runs via workflow_dispatch are safe.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - package.json
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./package.json').version")
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${v}" >> "$GITHUB_OUTPUT"
+          echo "Detected version: ${v}"
+
+      - name: Skip if tag already exists
+        id: gate
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if version field didn't change in this push
+        id: bumped
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          NEW: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          old=$(git show "HEAD~1:package.json" 2>/dev/null | node -e "
+            let s = ''; process.stdin.on('data', d => s += d).on('end', () => {
+              try { console.log(JSON.parse(s).version); } catch { console.log(''); }
+            });
+          " || echo "")
+          echo "old=${old}"
+          echo "new=${NEW}"
+          if [ "$old" = "$NEW" ]; then
+            echo "Version unchanged ($old -> $NEW); skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version bumped: $old -> $NEW"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - name: Install + test
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+
+      - name: Extract release notes from CHANGELOG
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const md = fs.existsSync('CHANGELOG.md') ? fs.readFileSync('CHANGELOG.md', 'utf-8') : '';
+            const re = new RegExp('^## \\\\[' + process.env.VERSION + '\\\\][^\\\\n]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n## \\\\[|$)', 'm');
+            const m = re.exec(md);
+            const body = m ? m[1].trim() : '';
+            fs.writeFileSync('release-notes.md', body || ('Release v' + process.env.VERSION));
+          "
+          echo "notes_path=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create annotated tag
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name 'askalf'
+          git config user.email 'support@askalf.org'
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub release
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md
+
+      - name: npm publish
+        if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance

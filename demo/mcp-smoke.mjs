@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const proxy = spawn(process.execPath, ['src/mcp-proxy-cli.mjs', '--', process.execPath, 'test/fixtures/fake-mcp-server.mjs'], { cwd: root });
+const proxy = spawn(process.execPath, ['src/mcp-proxy-cli.mjs', '--', process.execPath, 'support/fake-mcp-server.mjs'], { cwd: root });
 
 const byId = {};
 let buf = '';
