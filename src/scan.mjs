@@ -120,9 +120,11 @@ export const OBFUSCATION_RE = [
   { re: /\$\w+\$\w+/, why: 'concatenated variables as a command' },
   { re: /\|\s*\$\{?\w+\}?(?:\s|$)/, why: 'pipes into a variable-named command' },
   { re: /\b\w{1,4}=[^;\s|]{1,16}\s*;[^;]{0,40}\$\{?\w/, why: 'assigns then invokes via a variable' },
-  { re: /\bxxd\s+-r\b|\b(?:base32|openssl\s+enc)\b[^|]*\|\s*(?:ba)?sh\b/i, why: 'decodes then pipes to a shell' },
+  { re: /\bxxd\s+-r\b|\b(?:base32|base64|openssl\s+enc)\b[^|]*\|\s*(?:ba)?sh\b/i, why: 'decodes then pipes to a shell' },
   { re: /\beval\b/i, why: 'eval of dynamic content' },
-  { re: /(?:\\x[0-9a-f]{2}){3,}/i, why: 'hex-escaped payload' },
+  { re: /(?:\\x[0-9a-f]{2}){2,}/i, why: 'hex-escaped payload' },
+  { re: /\bprintf\b[^|;&\n]*(?:\\x[0-9a-f]{2}|\\[0-7]{3})/i, why: 'printf hex/octal building a command' },
+  { re: /\w(?:""|'')\w/, why: 'quote-split word (anti-detection)' },
 ];
 
 export function obfuscationHits(text = '') {

