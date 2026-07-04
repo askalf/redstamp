@@ -116,6 +116,45 @@ endpoint; the non-deterministic contrast case) and **Lakera Guard** (paid key).
 **Claw Patrol** is intentionally not on the roadmap as a row — it's a different
 layer (above).
 
+## External corpus (MITRE ATT&CK)
+
+The default corpus is warden-authored — so a second corpus, organized by an
+**outside taxonomy**, exists to blunt that: [`external-corpus.json`](external-corpus.json)
+groups its samples by **MITRE ATT&CK technique** (T1059 command execution, T1003
+credential dumping, T1048/T1567 exfiltration, T1053 scheduled tasks, T1490
+inhibit-recovery, T1611 container escape, …), with canonical command forms drawn
+from the public **GTFOBins / LOLBAS / HackTricks** knowledge bases. The threat
+*definitions and grouping* come from an external authority warden didn't write.
+Crucially, every attack technique ships **benign uses of the same tools** (curl to
+a real API, `certutil -hashfile`, `vssadmin list`, `docker run … npm test`,
+`iptables -L`) so precision is a genuine test, not a giveaway.
+
+```bash
+npm run arena:external                 # node arena/run.mjs --corpus external-corpus.json
+node arena/build-external-corpus.mjs   # regenerate the corpus
+```
+
+Results ([EXTERNAL-CORPUS-RESULTS.md](EXTERNAL-CORPUS-RESULTS.md)) — 68 samples,
+32 ATT&CK techniques, scored through the same pipe:
+
+| firewall | recall (block) | precision | under-gate |
+|---|---|---|---|
+| **warden** (default, offline) | **94.4%** | **100%** | 3/8 |
+| regex deny-list (baseline) | 30.6% | 95.8% | 8/8 |
+
+warden reproduces its high-recall / 100%-precision profile on a corpus it didn't
+organize, with **zero benign commands blocked** despite the shared-tool benign
+set. The 2 block-misses (`rundll32 javascript:` LOLBin, gnupg-keyring exfil) and
+the `/etc/shadow`-read / `vssadmin create shadow` under-gates are the honest tail
+— and they **independently cross-validate** warden's own coverage work: an
+outside taxonomy flagged the same real techniques.
+
+**Honest limit:** this is *externally taxonomized*, not a third-party dataset —
+the strings are still assembled in this repo. True neutrality needs an
+outside-contributed corpus, and the [protocol](protocol.md) makes that a drop-in:
+any labeled JSONL with `{id, action, expect}` scores here unchanged, no warden
+code involved. This corpus is the reference that invites those contributions.
+
 ## Honest caveats
 
 - **The corpus is warden-authored.** warden topping a corpus warden wrote is the
