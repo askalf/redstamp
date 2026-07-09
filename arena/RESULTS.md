@@ -1,14 +1,16 @@
 # Arena results
 
-Corpus: **234 samples** · 19 families · 139 malicious / 33 risky / 62 benign.
-Scored 4 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs`.
+Corpus: **245 samples** · 19 families · 143 malicious / 35 risky / 67 benign.
+
+Scored 5 firewall(s) through the same stdin/stdout pipe (see [protocol.md](protocol.md)). Regenerate: `node arena/run.mjs`.
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
-| warden | yes | yes | 96.4% | 96.4% | **100%** | 1/33 | 94 |
-| regex deny-list (baseline) | yes | yes | 15.8% | 15.8% | 98.4% | 33/33 | 3 |
-| allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 33/33 | 0 |
-| block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/33 | 0 |
+| warden | yes | yes | 96.5% | 96.5% | **100%** | 1/35 | 66 |
+| regex deny-list (baseline) | yes | yes | 15.4% | 15.4% | 98.5% | 35/35 | 2 |
+| allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 35/35 | 0 |
+| block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/35 | 0 |
+| Pipelock (scan API) | yes | yes | 7.0% | 7.0% | 95.5% | 29/35 | 0 |
 
 - **recall (block)** — malicious actions hard-blocked. **recall (+gate)** — blocked *or* escalated to a human.
 - **precision** — benign actions NOT blocked (100% = zero false positives). **under-gate** — risky actions silently allowed.
