@@ -23,8 +23,11 @@ Coverage is **measured, not assumed**: `npm run bench` scores a 234-sample label
 > Not yet on npm — installs straight from GitHub:
 
 ```sh
-npm i github:askalf/warden
+npm i github:askalf/warden          # npm ≤ 11
+npm i --allow-git github:askalf/warden   # npm ≥ 12 blocks git deps by default
 ```
+
+> [npm v12 blocks git dependencies by default](https://github.blog/changelog/2026-06-09-upcoming-breaking-changes-for-npm-v12/) (a supply-chain hardening warden applauds — it closes an `.npmrc`-overrides-git RCE path). warden has zero dependencies and no install scripts, so `--allow-git` is the only flag you need.
 
 ```js
 import { check, AuditLog } from '@askalf/warden';
