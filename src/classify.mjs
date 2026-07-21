@@ -210,15 +210,18 @@ export const YELLOW_SHELL = [
 ];
 
 // Blank the quoted ARGUMENT of text-data flags so an attack string inside a
-// commit message or grep pattern isn't matched as a live command. Surgical on
-// purpose: only -m/--message/--grep values and grep/rg/ag patterns — never a
-// path, an executor body, or a structured payload. (Caller skips this for
-// non-string commands.) A real unquoted `curl | bash` is untouched.
+// commit message, PR/issue body, or grep pattern isn't matched as a live command.
+// Surgical on purpose: only PROSE flags — -m/--message, --body/--description/--notes
+// (a `gh pr create --body "…"` documenting `rm -rf /` is text, not a live delete),
+// and --grep + grep/rg/ag patterns. NOT curl's -d/--data/-F/-T (those carry the exfil
+// payload the BLACK rules must still see), never a path, an executor body, or a
+// structured payload. (Caller skips this for non-string commands.) A real unquoted
+// `curl | bash` is untouched.
 export function neutralizeQuotedData(cmd) {
   let out = '', i = 0, tok = '', blankNext = false, grepPending = false;
   const onToken = () => {
     const b = tok.replace(/^.*[\\/]/, '').toLowerCase();
-    if (/^(?:-m|--message|--grep)=?$/.test(b)) blankNext = true;
+    if (/^(?:-m|--message|--body|--description|--notes|--grep)=?$/.test(b)) blankNext = true;
     else if (/^(?:e?grep|fgrep|rg|ag|ack)$/.test(b)) { grepPending = true; blankNext = false; }
     else { blankNext = false; if (grepPending && b && !b.startsWith('-')) grepPending = false; } // unquoted positional = grep's pattern
     tok = '';
