@@ -19,8 +19,8 @@ export const SECRET_RE = [
 // convention ($API_KEY, ${GITHUB_TOKEN}); a lowercase `$token` / `$key` is an
 // ordinary local variable. The case-insensitive form read AWS's pagination
 // cursor (`--next-token "$token"`) as a credential and helped red-board a
-// benign vendor skill twice (#87) - the same false-positive class the `.env`
-// lookbehind below was added for.
+// benign vendor skill twice (askalf/truecopy#87) - the same false-positive
+// class the `.env` lookbehind below was added for.
 export const SECRET_ENV_RE = /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*\}?/;
 // `.env` needs the lookbehind: `process.env` / `self.env` / `import.meta.env`
 // are ordinary CODE, not the dotenv FILE — scanning real marketplace skills,
@@ -37,8 +37,7 @@ export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
   { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
-  // base64-to-shell is handled by b64ShellHit() below: the verdict depends on
-  // where the bytes CAME FROM, which a flat regex entry cannot express.
+  { re: /base64\s+-d\s*\|\s*(?:ba)?sh/i, why: 'obfuscated payload to shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
   { re: /\b(?:e-?mail|send|upload|post|transmit|forward|exfil\w*)\b\s+(?:all\s+|the\s+|every\s+|your\s+)?(?:secrets?|credentials?|api[ _-]?keys?|passwords?|tokens?|private\s+keys?|(?<!\w)\.env\b)\b[^.]{0,60}(?:@|https?:|webhook|attacker|to\s+\S+@)/i, why: 'data-exfil instruction (to a destination)' },
   { re: /reveal\s+(?:all\s+|the\s+|your\s+)?(?:secrets|system\s+prompt|prompt|api\s+keys|credentials)/i, why: 'system-prompt/secret extraction' },
@@ -150,44 +149,12 @@ export function matchOf(re, text = '') {
 }
 
 // Detailed form of injectionHits: the flag AND the substring it matched (with offset).
-// Decoding base64 into a shell is a DROPPER when the bytes came from somewhere
-// else, and a TRANSPORT when the same text produced them locally a moment earlier.
-// That provenance -- not proximity to a fetch -- is the real signal:
-//
-//   curl <url> | base64 -d | sh                      <- foreign bytes, dropper
-//   curl <url> -o /tmp/p; cat /tmp/p | base64 -d | sh <- foreign bytes, dropper
-//   b64=$(printf %s "$body" | base64); echo $b64 | base64 -d | sh  <- self-encoded
-//
-// A same-line "is there a fetch nearby" gate is defeated by a newline, and a
-// whole-blob "is there a fetch anywhere" gate misfires on any script that also
-// happens to curl something -- the real AWS HyperPod script carries 11 fetch
-// verbs/URLs while base64-ing only its OWN payload, so that test would call it a
-// dropper again. Keying on a LOCAL ENCODE gets both right: a foreign payload has
-// no encode step in the same text, because the attacker encoded it beforehand.
-export const B64_TO_SHELL_RE = /base64\s+-d\s*\|\s*(?:ba)?sh/i;
-// `| base64` NOT followed by -d: the encode half of a self-transport.
-export const LOCAL_B64_ENCODE_RE = /\|\s*base64\b(?!\s*-d)/i;
-
-// → { flag, match, start, end } or null. Critical flag when the payload is
-// foreign; advisory-grade flag when the text encoded it itself.
-export function b64ShellHit(text = '') {
-  const m = matchOf(B64_TO_SHELL_RE, text);
-  if (!m) return null;
-  const selfEncoded = LOCAL_B64_ENCODE_RE.test(text);
-  return {
-    flag: selfEncoded ? 'base64 payload piped to a shell' : 'obfuscated payload to shell',
-    match: m.match, start: m.start, end: m.end,
-  };
-}
-
 export function injectionHitsDetailed(text = '') {
   const out = [];
   for (const p of INJECTION_RE) {
     const m = matchOf(p.re, text);
     if (m) out.push({ flag: p.why, match: m.match, start: m.start, end: m.end });
   }
-  const b64 = b64ShellHit(text); // provenance-aware; see b64ShellHit above
-  if (b64) out.push(b64);
   return out;
 }
 
