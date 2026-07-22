@@ -9,12 +9,39 @@ import { resolveConfig } from './policy.mjs';
 const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir();
 
 /** Scan a project dir + git remotes -> a sensible starter policy. */
-export function buildInitPolicy(cwd = process.cwd()) {
+// Hosts every policy needs regardless of where it was created.
+const BASE_EGRESS = ['api.anthropic.com', 'registry.npmjs.org'];
+
+// A GLOBAL policy governs projects that have nothing to do with the directory
+// `init --global` happened to run in, so it must not inherit that directory's
+// git remotes or its layout.
+//
+// NOTE: it deliberately does NOT seed github.com either. Allowlisting a host
+// suppresses the BLACK secret-exfil verdict for that host (decide() only raises
+// BLACK when a secret meets an EXTERNAL host), and GitHub issues/gists/comments
+// accept arbitrary attacker-readable content -- so trusting them would turn a
+// stolen-token drop into a silently-deferred RED. Routine read traffic is
+// already green without the allowlist; only a session already tainted by a
+// secret is affected, which is exactly the case that should be scrutinised.
+// See #81 for making GitHub ergonomic without reopening that hole.
+
+/** Build an init policy. Per-PROJECT (default) derives egress + write roots from
+ *  `cwd`, which is correct: that policy governs that project. GLOBAL derives
+ *  NEITHER -- it seeds universal dev hosts and leaves writeRoots null, because a
+ *  machine-wide policy inheriting one arbitrary directory's layout would flag
+ *  every write outside it (writeRoots is enforced as RED in decide()). */
+export function buildInitPolicy(cwd = process.cwd(), { global: isGlobal = false } = {}) {
+  const egress = new Set(BASE_EGRESS);
+
+  if (isGlobal) {
+    // No CWD-derived remotes, no CWD-derived writeRoots, no blanket host trust.
+    return { strict: false, deny: ['shell(sudo*)'], egressAllow: [...egress], writeRoots: null };
+  }
+
   const roots = [];
   for (const d of ['src', 'lib', 'app', 'pages', 'components', 'docs', 'scripts', 'test', 'tests']) {
     try { if (fs.statSync(path.join(cwd, d)).isDirectory()) roots.push(d + '/'); } catch {}
   }
-  const egress = new Set(['api.anthropic.com', 'registry.npmjs.org']);
   try {
     const gitcfg = fs.readFileSync(path.join(cwd, '.git', 'config'), 'utf8');
     for (const m of gitcfg.matchAll(/url\s*=\s*\S*?([a-z0-9.-]+\.[a-z]{2,})[:/]/gi)) egress.add(m[1].toLowerCase());
@@ -72,8 +99,9 @@ async function main() {
     if (f.length) { console.log(JSON.stringify(f, null, 2)); process.exit(1); }
     console.log('✓ no poisoned tool descriptions found');
   } else if (cmd === 'init') {
-    const policy = buildInitPolicy();
-    const target = flag('--global') ? path.join(HOME, '.warden', 'config.json') : resolveConfig();
+    const isGlobal = flag('--global');
+    const policy = buildInitPolicy(process.cwd(), { global: isGlobal });
+    const target = isGlobal ? path.join(HOME, '.warden', 'config.json') : resolveConfig();
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, JSON.stringify(policy, null, 2) + '\n');
     console.log('wrote ' + target + '\n');
