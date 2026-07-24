@@ -77,16 +77,28 @@ const CLAUSE_GAP = (n) => `(?:(?!\\\\n)[^.\\n]){0,${n}}`;
 // EXFIL_INTENT_RE and SENSITIVE_PATH_EXFIL_RE so the two cannot spell it
 // differently.
 const EXFIL_DEST = String.raw`(?:https?:|webhook|attacker|\bto\s+[\w.-]+\.[a-z]{2,}|@[\w.-]+\.[a-z]{2,})`;
-// …and the object half: things actually worth exfiltrating. Reuses
-// SENSITIVE_PATH_RE so the credential-file list stays in lockstep with the
-// path scanner instead of being re-spelled here.
-const EXFIL_OBJECT = String.raw`(?:secrets?|credentials?|api[ _-]?keys?|private\s+keys?|ssh\s+keys?|keys?|passwords?|tokens?|cookies?|session\s+(?:ids?|tokens?)|keychain|env(?:ironment)?\s+(?:vars?|variables?)|${SENSITIVE_PATH_RE.source})`;
+// …and the object half: things actually worth exfiltrating.
+//
+// Every noun is boundary-guarded on BOTH sides, exactly like EXFIL_WORD below.
+// The evidence half needs it just as much as the verb half: unguarded, `keys?`
+// matched as a bare substring inside any ordinary word ending in -keys, so
+// "steal the monkeys from the zoo" and "the whiskeys leak" satisfied the
+// evidence requirement and re-raised the flag this rule exists to stop. Same
+// shape for the loose set — `data` matched inside `metadata`, `env` inside
+// `venv`. Accidental substring hits are not evidence.
+const EXFIL_NOUN = String.raw`(?<![\w-])(?:secrets?|credentials?|api[ _-]?keys?|private\s+keys?|ssh\s+keys?|keys?|passwords?|tokens?|cookies?|databases?|session\s+(?:ids?|tokens?)|keychain|env(?:ironment)?\s+(?:vars?|variables?))(?![\w-])`;
+// Paths keep SENSITIVE_PATH_RE's own anchoring rather than the noun guards:
+// its alternatives end in a separator (`.aws[\\/]`) and a trailing `(?![\w-])`
+// would false-negative every real path, since a separator is followed by the
+// filename (`.aws/credentials`). Reused rather than re-spelled so the
+// credential-file list stays in lockstep with the path scanner.
+const EXFIL_OBJECT = String.raw`(?:${EXFIL_NOUN}|${SENSITIVE_PATH_RE.source})`;
 // Looser objects, accepted only AFTER the verb. "exfiltrate your data" / "leak
 // the env" is exfil phrasing; "the training data leak future patterns" is the
 // ordinary resource-leak sentence this rule keeps mistaking for one, and it
 // reads object-before-verb. Direction is the whole discriminator, so these are
 // deliberately absent from the reverse branch.
-const EXFIL_OBJECT_LOOSE = String.raw`(?:data\b|env\b)`;
+const EXFIL_OBJECT_LOOSE = String.raw`(?<![\w-])(?:data|env)(?![\w-])`;
 // 'exfiltration intent' — the bare words `exfiltrate` / `leak` / `steal` used to
 // fire on their own, which made this the noisiest rule in the set. Auditing
 // 2,000+ marketplace skills, EVERY hit was descriptive prose (memory leaks, ML

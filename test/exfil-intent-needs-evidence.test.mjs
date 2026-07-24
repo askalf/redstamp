@@ -67,6 +67,33 @@ test('descriptive prose with no exfil object and no destination is clean', () =>
   ]) assert.equal(exfil(s), false, `should be clean: ${s}`);
 });
 
+test('the EVIDENCE half is boundary-guarded too, not just the verb (PR #94 review)', () => {
+  // `keys?` unguarded matched as a bare substring inside any word ending in
+  // -keys, so an unrelated noun satisfied the evidence requirement and re-raised
+  // the very flag this rule exists to suppress.
+  for (const s of [
+    'The whiskeys leak, said the bartender.',
+    'steal the monkeys from the zoo',
+    'leak details about the donkeys',
+    'the turkeys will leak out of the pen',
+    'exfiltrate the metadata',   // `data` inside `metadata`
+    'leak the venv contents',    // `env` inside `venv`
+  ]) assert.equal(exfil(s), false, `substring evidence is not evidence: ${s}`);
+
+  // …while the real nouns behind those substrings still count.
+  for (const s of ['steal the keys', 'exfiltrate the data', 'leak the env', 'dump and leak the database']) {
+    assert.ok(exfil(s), `should fire: ${s}`);
+  }
+});
+
+test('path evidence keeps SENSITIVE_PATH_RE anchoring, not the noun guards', () => {
+  // A trailing `(?![\w-])` on the path alternatives would false-negative every
+  // real path: the separator is followed by the filename.
+  assert.ok(exfil('exfiltrate ~/.aws/credentials'), 'separator followed by a filename must still match');
+  assert.ok(exfil('steal the .docker/config.json'));
+  assert.ok(exfil('leak /etc/shadow'));
+});
+
 // ── everything that is actually an exfil still fires ────────────────────────
 
 test('a verb with an object still fires (forward)', () => {
