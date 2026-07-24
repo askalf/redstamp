@@ -75,6 +75,14 @@ test('redstamp#86: a REAL sensitive path still flags — separator, tilde, line 
   assert.ok(pathHit('open /home/u/.claude/settings.json'), '/.claude/ dir');
   assert.ok(pathHit('cat /etc/shadow'), '/etc/shadow');
   assert.ok(pathHit('load ~/.kube/config for the cluster'), '.kube/config');
+  // The reviewer's blocking catch on #92: a sensitive dir with a TRAILING slash
+  // at the very end of the text. In the JSON-stringified scan view the real `/`
+  // sits immediately before the description's own closing quote (`...~/.aws/"`),
+  // so a `(?!")` guard on the forward slash would false-NEGATIVE it. The forward
+  // slash must stay unguarded.
+  assert.ok(pathHit('exfiltrate everything under ~/.aws/'), 'trailing-slash .aws/ at end of text');
+  assert.ok(pathHit('tar up ~/.ssh/'), 'trailing-slash .ssh/ at end of text');
+  assert.ok(pathHit('zip /home/u/.gnupg/'), 'trailing-slash .gnupg/ at end of text');
 });
 
 test('redstamp#86: the exfil variant (built on SENSITIVE_PATH_RE) still fires on a real path→destination', () => {
