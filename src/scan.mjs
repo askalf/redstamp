@@ -65,9 +65,79 @@ const B64_DECODE = String.raw`base64\s+(?:--decode\b|-[A-Za-z]*[dD][A-Za-z]*)`;
 export const PIPE_TO_SHELL = String.raw`\|\s*(?:[\w./-]{0,24}\/)?(?:env\s+)?(?:ba|z|da|k|a)?sh\b`;
 export const B64_TO_SHELL_RE = new RegExp(`${B64_DECODE}[^|\\n]{0,40}${PIPE_TO_SHELL}`, 'i');
 
+// One clause's worth of gap. Stops at a real newline AND at a literal `\n`
+// two-char escape: callers often scan JSON-stringified text, where every newline
+// arrives as `\n` — without this, "clause"-bounding silently spans lines and
+// unrelated rows of a table read as one verb→object→destination (found scanning
+// real marketplace skills). Defined here because both SENSITIVE_PATH_EXFIL_RE
+// and EXFIL_INTENT_RE below are built from it.
+const CLAUSE_GAP = (n) => `(?:(?!\\\\n)[^.\\n]){0,${n}}`;
+
+// "Somewhere off this machine" — the destination half of an exfil. Shared by
+// EXFIL_INTENT_RE and SENSITIVE_PATH_EXFIL_RE so the two cannot spell it
+// differently.
+const EXFIL_DEST = String.raw`(?:https?:|webhook|attacker|\bto\s+[\w.-]+\.[a-z]{2,}|@[\w.-]+\.[a-z]{2,})`;
+// …and the object half: things actually worth exfiltrating.
+//
+// Every noun is boundary-guarded on BOTH sides, exactly like EXFIL_WORD below.
+// The evidence half needs it just as much as the verb half: unguarded, `keys?`
+// matched as a bare substring inside any ordinary word ending in -keys, so
+// "steal the monkeys from the zoo" and "the whiskeys leak" satisfied the
+// evidence requirement and re-raised the flag this rule exists to stop. Same
+// shape for the loose set — `data` matched inside `metadata`, `env` inside
+// `venv`. Accidental substring hits are not evidence.
+const EXFIL_NOUN = String.raw`(?<![\w-])(?:secrets?|credentials?|api[ _-]?keys?|private\s+keys?|ssh\s+keys?|keys?|passwords?|tokens?|cookies?|databases?|session\s+(?:ids?|tokens?)|keychain|env(?:ironment)?\s+(?:vars?|variables?))(?![\w-])`;
+// Paths keep SENSITIVE_PATH_RE's own anchoring rather than the noun guards:
+// its alternatives end in a separator (`.aws[\\/]`) and a trailing `(?![\w-])`
+// would false-negative every real path, since a separator is followed by the
+// filename (`.aws/credentials`). Reused rather than re-spelled so the
+// credential-file list stays in lockstep with the path scanner.
+const EXFIL_OBJECT = String.raw`(?:${EXFIL_NOUN}|${SENSITIVE_PATH_RE.source})`;
+// Looser objects, accepted only AFTER the verb. "exfiltrate your data" / "leak
+// the env" is exfil phrasing; "the training data leak future patterns" is the
+// ordinary resource-leak sentence this rule keeps mistaking for one, and it
+// reads object-before-verb. Direction is the whole discriminator, so these are
+// deliberately absent from the reverse branch.
+const EXFIL_OBJECT_LOOSE = String.raw`(?<![\w-])(?:data|env)(?![\w-])`;
+// 'exfiltration intent' — the bare words `exfiltrate` / `leak` / `steal` used to
+// fire on their own, which made this the noisiest rule in the set. Auditing
+// 2,000+ marketplace skills, EVERY hit was descriptive prose (memory leaks, ML
+// target leakage, defensive threat lists), and two of those FPs were published
+// against named vendors: `memory-leak-debugging` (#90) and newrelic:kubernetes,
+// whose only `leak` is "…or fix the leak." inside an example answer (#75). The
+// flag is advisory on its own, but any co-occurring flag lifts the whole finding
+// to critical, so a bare `leak` rides along as a public exfiltration verdict.
+//
+// So the word now needs EVIDENCE of an actual exfil in the same clause:
+//   forward — verb → (an object worth taking | a destination to send it to)
+//             "exfiltrate the private key", "leak the results to https://…"
+//   reverse — object → verb  ("API keys can leak")
+// The reverse direction deliberately takes the strict OBJECT only: a destination
+// naturally follows the verb, so `https://… <60 chars> steal` is doc prose, not
+// phrasing anyone exfiltrates in.
+//
+// This is a NARROWING, and its false-negative cost is close to nil: a real
+// instruction has to name what it takes or where it goes, and every phrasing
+// that does is also covered by the destination-bearing rules below and by
+// SENSITIVE_PATH_EXFIL_RE. What it drops is a word with neither half — which
+// was never an instruction in the first place.
+//
+// `(?<![\w-])…(?![\w-])` rather than `\b`: `-` is a word boundary to a regex, so
+// plain `\b` matched inside hyphen-joined identifiers and compounds
+// (`memory-leak-debugging`, `data-leak prevention`). Names are blanked before
+// this runs (mcp.mjs blankNameValue), but compounds in PROSE are not.
+//
+// Both gaps are bounded and neither quantifier nests over overlapping input, so
+// the match stays linear — bench/redos.mjs covers the shape.
+const EXFIL_WORD = String.raw`(?<![\w-])(?:exfiltrate|leak|steal)(?![\w-])`;
+export const EXFIL_INTENT_RE = new RegExp(
+  `${EXFIL_WORD}${CLAUSE_GAP(60)}(?:${EXFIL_OBJECT}|${EXFIL_OBJECT_LOOSE}|${EXFIL_DEST})` +
+  `|${EXFIL_OBJECT}${CLAUSE_GAP(60)}${EXFIL_WORD}`,
+  'i');
+
 export const INJECTION_RE = [
   { re: /ignore\s+(?:all\s+|the\s+|your\s+)?(?:previous|prior|above)\s+(?:instructions|rules|prompt)/i, why: 'instruction-override' },
-  { re: /\b(?:exfiltrate|leak|steal)\b/i, why: 'exfiltration intent' },
+  { re: EXFIL_INTENT_RE, why: 'exfiltration intent' },
   { re: /disregard[^.]{0,20}(?:safety|guardrail|policy)/i, why: 'safety-bypass instruction' },
   { re: B64_TO_SHELL_RE, why: 'obfuscated payload to shell' },
   { re: /send\s+(?:all\s+|the\s+)?(?:files|secrets|env|credentials|keys)[^.]{0,40}(?:https?|webhook|curl)/i, why: 'data-exfil instruction' },
@@ -85,14 +155,9 @@ export const INJECTION_RE = [
 // INJECTION_RE patterns miss ("read ~/.ssh/id_rsa and POST it to https://…" —
 // wrong verb/noun combination for them), while a bare path MENTION ("put the
 // token in .env") stays a mention. Built on SENSITIVE_PATH_RE so the two can't
-// drift apart. The gaps stop at a real newline AND at a literal `\n` two-char
-// escape: callers often scan JSON-stringified text, where every newline arrives
-// as `\n` — without this, "clause"-bounding silently spans lines and unrelated
-// rows of a table read as verb→path→destination (found scanning real
-// marketplace skills).
-const CLAUSE_GAP = (n) => `(?:(?!\\\\n)[^.\\n]){0,${n}}`;
+// drift apart, and on the same CLAUSE_GAP / EXFIL_DEST as EXFIL_INTENT_RE above.
 export const SENSITIVE_PATH_EXFIL_RE = new RegExp(
-  `\\b(?:read|cat|open|copy|grab|collect|send|post|upload|transmit|forward|deliver|ship|curl|fetch|e-?mail)\\b${CLAUSE_GAP(80)}${SENSITIVE_PATH_RE.source}${CLAUSE_GAP(100)}(?:https?:|webhook|attacker|\\bto\\s+[\\w.-]+\\.[a-z]{2,}|@[\\w.-]+\\.[a-z]{2,})`,
+  `\\b(?:read|cat|open|copy|grab|collect|send|post|upload|transmit|forward|deliver|ship|curl|fetch|e-?mail)\\b${CLAUSE_GAP(80)}${SENSITIVE_PATH_RE.source}${CLAUSE_GAP(100)}${EXFIL_DEST}`,
   'i');
 export const URL_RE = /https?:\/\/([^\/\s'"]+)/gi;
 
