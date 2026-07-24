@@ -47,8 +47,16 @@ test('scanMcpTools severity: instructions are critical, bare capability mentions
 test('scanMcpTools FP classes from the marketplace audit stay out of critical', () => {
   const scan1 = (tool) => scanMcpTools([tool])[0];
   // 1) everyday-engineering 'leak' / defensive threat lists → 'exfiltration intent'
-  //    flag remains, but severity is advisory (descriptive prose, no destination)
-  const leak = scan1({ name: 'ml-evaluation', description: 'Check for target leakage. Random splits leak future patterns.' });
+  //    Since redstamp#75 the bare word alone no longer raises the flag at all:
+  //    it needs an object worth taking or a destination in the same clause. This
+  //    line has neither, so it is now CLEAN rather than advisory-with-a-flag.
+  //    Advisory was not enough — any co-occurring flag lifts a finding to
+  //    critical, so a bare `leak` shipped as a public exfiltration verdict
+  //    against a named vendor (newrelic:kubernetes).
+  assert.equal(scanMcpTools([{ name: 'ml-evaluation', description: 'Check for target leakage. Random splits leak future patterns.' }]).length, 0);
+  //    …while a defensive threat list that names WHAT gets taken keeps the flag,
+  //    and keeps it advisory.
+  const leak = scan1({ name: 'threat-model', description: 'A malicious dependency could leak your API keys.' });
   assert.equal(leak.severity, 'advisory');
   assert.ok(leak.flags.includes('exfiltration intent'));
   const threat = scan1({ name: 'docker-security', description: 'An attacker in the build context could: Steal secrets from build context. Exfiltrate data.' });

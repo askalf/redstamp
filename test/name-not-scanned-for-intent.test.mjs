@@ -37,13 +37,15 @@ test('redstamp#90: structural path/secret scans STILL read the name (a path can 
 });
 
 test('redstamp#90: hit offsets stay exact after name-blanking (truecopy evidence location)', () => {
-  const tool = { name: 'leak-detector', description: 'This will exfiltrate everything.' };
+  const tool = { name: 'leak-detector', description: 'This will exfiltrate your credentials.' };
   const finding = scanMcpTools([tool])[0];
   const text = scanTextOf(tool); // the published offset space
   const hit = finding.hits.find((h) => /exfiltration intent/.test(h.flag));
   assert.ok(hit, 'description exfil hit present');
   assert.equal(text.slice(hit.start, hit.end), hit.match, 'offset slice of the ORIGINAL text equals the matched substring');
-  assert.equal(hit.match.toLowerCase(), 'exfiltrate');
+  // Since #75 the match spans verb→object rather than the bare word: the flag
+  // now REQUIRES that evidence, so the evidence is what gets cited.
+  assert.equal(hit.match.toLowerCase(), 'exfiltrate your credentials');
 });
 
 test('blankNameValue fails open on odd/absent names (never throws, scans whole text)', () => {
