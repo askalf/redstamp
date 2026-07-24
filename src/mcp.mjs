@@ -163,6 +163,30 @@ const ADVISORY_WORDS = new Set(['exfiltration intent']);
  */
 export const scanTextOf = (tool) => safeStringify(tool).replace(/\\r\\n|\\n|\\r/g, '\n');
 
+/**
+ * Blank the tool NAME value's characters in `text` (the scanTextOf view) to
+ * same-length spaces, so a narrative-intent scan cannot match inside an
+ * identifier while every published hit offset into `text` stays exact. A tool
+ * NAME is an identifier, not prose — it cannot carry an instruction, so matching
+ * intent patterns (exfiltrate/leak/steal, instruction-override, jailbreak
+ * personas, …) against it is pure noise (redstamp#90: `memory-leak-debugging`
+ * flagged 'exfiltration intent' on the `leak` in its own name).
+ *
+ * Fails OPEN — returns `text` unchanged when the name can't be located (absent,
+ * non-string, or a name whose JSON form was altered by scanTextOf's newline
+ * normalization). Never hides a real description hit; only ever un-flags the name.
+ */
+export function blankNameValue(text, tool) {
+  if (!tool || typeof tool.name !== 'string' || tool.name.length === 0) return text;
+  const esc = JSON.stringify(tool.name);              // "json-escaped-name" incl. surrounding quotes
+  const at = text.indexOf('"name":' + esc);
+  if (at < 0) return text;
+  const ns = at + '"name":'.length + 1;               // first value char (past the opening quote)
+  const ne = at + '"name":'.length + esc.length - 1;  // just past the last value char (before closing quote)
+  if (text.slice(ns, ne) !== esc.slice(1, -1)) return text; // sanity: region must equal the escaped name
+  return text.slice(0, ns) + ' '.repeat(ne - ns) + text.slice(ne);
+}
+
 export function scanMcpTools(tools = []) {
   const findings = [];
   if (!Array.isArray(tools)) return findings;           // fail-safe: a non-array tool list isn't scannable
@@ -177,22 +201,22 @@ export function scanMcpTools(tools = []) {
     // `\n` to a regex — clause-bounded patterns would silently span lines, and
     // unrelated rows of a table can read as one verb→path→destination "clause".
     const text = scanTextOf(t);
-    const flags = injectionHits(text); // NOT scanInjection — that would re-stringify and re-escape the newlines just normalized
-    // hits: the same flags with the substring each matched, for evidence surfacing.
-    // Kept strictly parallel to `flags` (same order, same conditions) so the flag
-    // output is byte-for-byte unchanged; `hits` is purely additive.
-    //
-    // `start`/`end` are the match's offsets INTO `text` above -- i.e. into the
-    // stringified-and-newline-normalized view, NOT into the caller's raw source.
-    // A consumer that wants a source position must reverse that transform; using
-    // these offsets against raw bytes would silently point at the wrong place.
-    // They are carried because re-finding a match by SEARCHING for its text is
-    // ambiguous (a short match like a bare path token recurs many times in one
-    // document) and fails outright when a match window slices a JSON escape.
-    // matchOf/injectionHitsDetailed have always computed them; they were simply
-    // dropped here. See truecopy#99.
-    const hits = injectionHitsDetailed(text).map((h) => ({ flag: h.flag, match: h.match, start: h.start, end: h.end }));
-    const exfilM = matchOf(SENSITIVE_PATH_EXFIL_RE, text);
+    // Narrative-intent patterns scan the tool MINUS its name: a name is an
+    // identifier, not prose, so an injection/exfil/jailbreak match inside it is
+    // noise (redstamp#90 — `memory-leak-debugging` tripped 'exfiltration intent'
+    // on the `leak` in its own name). blankNameValue spaces out the name value at
+    // the SAME length, so hit offsets into `text` stay exact. The structural
+    // MENTION scans (sensitive-path / secret-env, below) still read the whole
+    // `text` — a sensitive path CAN legitimately hide in a name.
+    const injText = blankNameValue(text, t);
+    // hits: injection flags + the substring/offset each matched, for evidence
+    // surfacing. `start`/`end` are offsets INTO `text` (injText has identical
+    // length), the stringified-and-newline-normalized view, NOT the caller's raw
+    // source; a consumer wanting a source position must reverse that transform
+    // (truecopy#99). `flags` is derived from `hits` so the two stay byte-parallel.
+    const hits = injectionHitsDetailed(injText).map((h) => ({ flag: h.flag, match: h.match, start: h.start, end: h.end }));
+    const flags = hits.map((h) => h.flag);
+    const exfilM = matchOf(SENSITIVE_PATH_EXFIL_RE, injText);
     if (exfilM) { flags.push('sensitive-path exfil instruction (path → destination)'); hits.push({ flag: 'sensitive-path exfil instruction (path → destination)', match: exfilM.match, start: exfilM.start, end: exfilM.end }); }
     let severity = flags.some((w) => !ADVISORY_WORDS.has(w)) ? 'critical' : 'advisory';
     const pathM = matchOf(SENSITIVE_PATH_RE, text);
