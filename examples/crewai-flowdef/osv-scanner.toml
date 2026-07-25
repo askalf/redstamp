@@ -1,0 +1,21 @@
+# Suppression scoped to this example's manifest (requirements.txt) only.
+#
+# redstamp's own supply chain is not affected by anything below. No workflow
+# installs this file — arena.yml is the only pip step in CI and it installs the
+# hash-pinned arena/requirements-mcp-firewall.txt, which has zero OSV hits.
+# This file exists so a user who runs the CrewAI example knows what they are
+# pulling in, and so the Scorecard Vulnerabilities check reflects that.
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-311"
+ignoreUntil = 2026-10-23
+reason = """
+chromadb pre-authentication code injection (aliases CVE-2026-45829,
+GHSA-f4j7-r4q5-qw2c). No fixed release exists: the advisory's last_affected is
+1.5.9, which is also the latest chromadb on PyPI. Unreachable here regardless —
+crewai pins chromadb~=1.1.0, so no bump can clear it, and a CrewAI Flow never
+constructs a Chroma client. _musl_rag_shim.py stubs the chromadb/lancedb subtree
+outright, and README.md documents it as unused by this example. Re-check on the
+ignoreUntil date; drop this entry as soon as chromadb ships a fix and crewai
+widens its pin.
+"""
