@@ -69,6 +69,13 @@ python dump_flow_definition.py            # -> the FlowDefinition (schema_: crew
   `chromadb` (CrewAI's vector-memory RAG deps, which a Flow doesn't use) ship no
   musllinux wheels. `_musl_rag_shim.py` stubs only that unused subtree so the
   genuine Flow engine imports. On glibc the shim is a no-op — delete it.
+- **Known-unfixed advisory in the tree.** `crewai` pins `chromadb~=1.1.0`, and
+  every chromadb release to date is affected by CVE-2026-45829 (pre-auth code
+  injection) — there is no patched version to upgrade to. A Flow never
+  constructs a Chroma client, and `_musl_rag_shim.py` stubs the subtree, so this
+  example does not reach the vulnerable code; `osv-scanner.toml` records that.
+  If you adapt this file into something that *does* use CrewAI's vector memory,
+  re-evaluate. Nothing redstamp itself ships depends on chromadb.
 - **Next step (LLM-driven).** This example governs a Flow's tool surface with
   deterministic steps. To govern an LLM's *tool choices*, put a CrewAI `Agent`
   in a Flow step and supply its tools via `crewai-tools`' `MCPServerAdapter`
