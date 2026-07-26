@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+### Added
+- **`guardMcpCallAsync` — the MCP surface can finally reach the LLM judge.**
+  `guardMcpCall` is synchronous, and `guardHandler`, though async, called it — so
+  no MCP consumer could consult the judge at all, whatever it passed in `opts`.
+  A judge handed to `guardHandler` was silently ignored: configured and inert.
+
+  Stitching the two existing entry points together from outside does **not**
+  close it. `checkAsync` derives `gray` from its own `decide()` pass, which does
+  not include the MCP shell-spoof leaf scan — so a call that is gray *only*
+  because a payload is buried under an arbitrary argument key never reaches the
+  judge. Measured rather than assumed: across six name/payload pairs where a
+  red-tier command hides under an innocuous key on a benignly-named tool
+  (`list_items`, `read_file`, `get_status`, …), **6 of 6** were gray via the leaf
+  scan and not gray to `checkAsync`. That is precisely the obfuscated-payload
+  case the judge exists for, and it was unreachable.
+
+  `guardMcpCallAsync` runs the judge against the **leaf-scanned** verdict.
+  `guardHandler` now takes the async path whenever a judge is supplied, and the
+  sync path otherwise so judge-less callers are unchanged. Omitting `opts.judge`
+  gives behaviour and verdicts identical to `guardMcpCall`.
+
+### Changed
+- **The escalate-only judge merge now lives in one place: `applyJudge`.**
+  Extracted from `checkAsync` and shared with `guardMcpCallAsync`. A second copy
+  is the dangerous kind of duplication here — a drifted one could let a judge
+  *lower* a verdict, the one thing it must never do. The invariants (consulted
+  only when gray and not already blocked, escalate-only, judge errors keep the
+  deterministic verdict) are now pinned by direct tests as well as through both
+  callers. `checkAsync` behaviour is unchanged; full suite 266/266.
+- **The MCP audit record is written after the judge, not before.** `guardMcpCall`
+  recorded inside the classification path, so an escalation applied afterwards
+  would have left the audit log disagreeing with the decision actually enforced.
+  The deterministic core is split out and both entry points record once, at the
+  end — exactly one entry per call, carrying the final verdict.
+
 ### Fixed
 - **`obfuscated payload to shell` recognised one spelling out of twelve** (#88).
   Both halves of the pattern were too narrow: the decode flag matched only `-d`
