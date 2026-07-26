@@ -166,21 +166,46 @@ export function check(action, policy = DEFAULT_POLICY, { audit = null, skillText
  */
 export async function checkAsync(action, policy = DEFAULT_POLICY, { audit = null, skillText = '', judge = null } = {}) {
   const v = decide(action, policy, skillText);
-  if (judge && v.decision !== 'block' && v.gray) {
-    try {
-      const j = await judge(action, v);
-      if (j && j.tier && ORDER[j.tier] > ORDER[v.tier]) {
-        v.tier = j.tier;
-        v.why.push(`🧠 judge escalated → ${j.tier}: ${j.reason || 'unspecified'}`);
-        if (j.tier === TIER.BLACK) v.decision = 'block';
-        else if (j.tier === TIER.RED && v.decision === 'allow') v.decision = 'approve';
-      } else if (j && j.reason) {
-        v.why.push(`🧠 judge: ${j.reason}`);
-      }
-    } catch (e) {
-      v.why.push('🧠 judge unavailable (fail-safe: kept deterministic verdict)');
-    }
-  }
+  await applyJudge(action, v, judge);
   recordVerdict(audit, action, v);
+  return v;
+}
+
+/**
+ * Apply an optional LLM judge to a verdict, IN PLACE. Shared by checkAsync and
+ * the MCP surface's guardMcpCallAsync so the escalate-only invariant lives in
+ * exactly ONE place — a second copy that drifted could let a judge LOWER a
+ * verdict, which is the one thing it must never do.
+ *
+ * Invariants, all load-bearing:
+ *  - consulted ONLY when a judge exists, the verdict is gray, and it is not
+ *    already blocked (never ask a judge to bless what the rules blocked);
+ *  - can only ESCALATE — an equal or lower tier is recorded as a note, never
+ *    applied;
+ *  - a judge throw/timeout is swallowed and the deterministic verdict kept, so
+ *    an outage degrades to deterministic-only rather than failing an action open.
+ *
+ * Takes the verdict as an argument instead of recomputing it, so a caller that
+ * has already escalated by other means — the MCP shell-spoof leaf scan — gets
+ * the judge applied to THAT verdict rather than to a weaker one. That is the
+ * whole reason guardMcpCallAsync can exist without duplicating this logic.
+ *
+ * @returns the same verdict object, mutated.
+ */
+export async function applyJudge(action, v, judge) {
+  if (!judge || v.decision === 'block' || !v.gray) return v;
+  try {
+    const j = await judge(action, v);
+    if (j && j.tier && ORDER[j.tier] > ORDER[v.tier]) {
+      v.tier = j.tier;
+      v.why.push(`🧠 judge escalated → ${j.tier}: ${j.reason || 'unspecified'}`);
+      if (j.tier === TIER.BLACK) v.decision = 'block';
+      else if (j.tier === TIER.RED && v.decision === 'allow') v.decision = 'approve';
+    } else if (j && j.reason) {
+      v.why.push(`🧠 judge: ${j.reason}`);
+    }
+  } catch {
+    v.why.push('🧠 judge unavailable (fail-safe: kept deterministic verdict)');
+  }
   return v;
 }

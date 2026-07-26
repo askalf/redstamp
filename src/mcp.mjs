@@ -1,7 +1,7 @@
 // MCP middleware — firewall an MCP server's tool-calls, and scan its advertised
 // tools for poisoning (malicious instructions hidden in names/descriptions —
 // the OpenClaw poisoned-skill / supply-chain class).
-import { check, recordVerdict } from './index.mjs';
+import { check, recordVerdict, applyJudge } from './index.mjs';
 import { classify, TIER, ORDER, WRITE } from './classify.mjs';
 import { injectionHits, injectionHitsDetailed, matchOf, safeStringify, SENSITIVE_PATH_RE, SENSITIVE_PATH_EXFIL_RE, SECRET_ENV_RE } from './scan.mjs';
 
@@ -60,8 +60,14 @@ function shellLeaves(v, key = '', depth = 0, out = []) {
   return out;
 }
 
-/** Firewall a single MCP `tools/call` request. Returns { verdict, action }. */
-export function guardMcpCall(req, policy, opts = {}) {
+/**
+ * Deterministic core of the MCP guard: map → classify → shell-spoof leaf scan.
+ * Split out so the sync and async entry points share one implementation and the
+ * audit record can be written AFTER any judge escalation — recording inside the
+ * core would persist the pre-judge verdict and make the audit log disagree with
+ * the decision actually enforced.
+ */
+function guardMcpCore(req, policy, opts = {}) {
   const name = req?.params?.name ?? req?.name;
   const args = req?.params?.arguments ?? req?.arguments ?? {};
   const action = mapMcpToAction(name, args, opts.nameMap || {});
@@ -83,6 +89,36 @@ export function guardMcpCall(req, policy, opts = {}) {
     }
     verdict.gray = verdict.gray || verdict.decision === 'approve' || verdict.tier === TIER.YELLOW;
   }
+  return { verdict, action };
+}
+
+/** Firewall a single MCP `tools/call` request. Returns { verdict, action }. */
+export function guardMcpCall(req, policy, opts = {}) {
+  const { verdict, action } = guardMcpCore(req, policy, opts);
+  recordVerdict(opts.audit, action, verdict);
+  return { verdict, action };
+}
+
+/**
+ * guardMcpCall plus the optional LLM-judge tier — the MCP analogue of checkAsync.
+ *
+ * Without this, an MCP surface could not reach the judge at all: guardMcpCall is
+ * synchronous, and routing around it via checkAsync loses the shell-spoof leaf
+ * scan. Worse, composing the two externally (classify twice, take the worse
+ * verdict) leaves a hole — checkAsync derives `gray` from its own decide() pass,
+ * which does NOT include the leaf scan, so a call that is gray ONLY because of a
+ * payload buried under an arbitrary argument key never reaches the judge. That is
+ * exactly the obfuscated-payload case the judge exists for.
+ *
+ * Here the judge runs against the LEAF-SCANNED verdict, closing that gap, and the
+ * escalate-only invariant is the shared `applyJudge` from index.mjs rather than a
+ * second copy that could drift.
+ *
+ * `opts.judge` omitted → identical behaviour and verdicts to guardMcpCall.
+ */
+export async function guardMcpCallAsync(req, policy, opts = {}) {
+  const { verdict, action } = guardMcpCore(req, policy, opts);
+  await applyJudge(action, verdict, opts.judge || null);
   recordVerdict(opts.audit, action, verdict);
   return { verdict, action };
 }
@@ -106,14 +142,22 @@ export function scanToolResult(result) {
 /**
  * Wrap an MCP tools/call handler so every call is firewalled before it runs AND
  * its result is scanned for injection before it reaches the agent.
- *   guardHandler(realHandler, policy, { onApprove, audit, scanResults })
+ *   guardHandler(realHandler, policy, { onApprove, audit, scanResults, judge })
  * onApprove(action, verdict) => boolean — defaults to deny (fail-closed) in unattended mode.
  * scanResults (default true) — neutralize a result that carries prompt-injection.
+ * judge (optional) — LLM escalation tier for gray verdicts; see guardMcpCallAsync.
+ *
+ * The wrapper is already async, but it used to call the SYNC guardMcpCall, so a
+ * judge passed in opts was silently ignored — configured and inert. It now takes
+ * the async path whenever a judge is supplied, and the sync path otherwise so a
+ * judge-less caller keeps the identical (allocation-free) behaviour.
  */
 export function guardHandler(handler, policy, opts = {}) {
   const onApprove = opts.onApprove || (async () => false);
   return async function guarded(req) {
-    const { verdict, action } = guardMcpCall(req, policy, opts);
+    const { verdict, action } = opts.judge
+      ? await guardMcpCallAsync(req, policy, opts)
+      : guardMcpCall(req, policy, opts);
     if (verdict.decision === 'block') return mcpError(`warden BLOCKED (${verdict.tier}): ${verdict.why.join('; ')}`);
     if (verdict.decision === 'approve') {
       const ok = await onApprove(action, verdict);
