@@ -70,7 +70,7 @@ export const BLACK_SHELL = [
   // forms (`crontab -l`, `-e`, `-r`) start with a dash and are excluded.
   { re: /\bcrontab\b(?:\s+-u\s+\S+)?\s+(?:-(?=\s|$)|[^\s-]\S*)/i, why: 'installs a crontab from a file/stdin (persistence)' },
   { re: /(?:(?<![0-9&])>>?|tee\b|\bcp\b|\bmv\b|\becho\b|install)[^;\n]*authorized_keys/i, why: 'writes an SSH backdoor (authorized_keys)' },
-  { re: /(?:(?<![0-9&])>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^;\n]*[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload)' },
+  { re: /(?:(?<![0-9&])>>?|tee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^;\n]*(?:[\\/]etc[\\/](?:cron|systemd|ld\.so\.preload|sudoers|rc\.local|init\.d|profile\.d)|[\\/]\.config[\\/]autostart[\\/])/i, why: 'writes a persistence/escalation file (cron/systemd/sudoers/ld.so.preload/XDG-autostart)' },
   // user-scoped systemd unit (~/.config/systemd/user/…) — the unprivileged sibling
   // of the /etc/systemd write above; no root needed, still boots with the session.
   { re: /(?:(?<![0-9&])>>?|\btee\b|\bcp\b|\bmv\b|\binstall\b|\becho\b)[^;\n]*[\\/]\.config[\\/]systemd[\\/]user[\\/]/i, why: 'writes a user systemd unit (persistence)' },
@@ -139,7 +139,7 @@ export const BLACK_SHELL = [
   //     read-only forms (reg query Run, schtasks /query, Get-ScheduledTask,
   //     Copy-Item to non-Startup) are excluded by requiring a write verb + target. ---
   { re: /(?:New-ItemProperty|Set-ItemProperty)\b[^|]*CurrentVersion[\\/]+Run\b/i, why: 'registry Run-key persistence (cmdlet)' },
-  { re: /(?:Copy-Item|Move-Item|Set-Content|Add-Content|Out-File|New-Item|Tee-Object|\bcp\b|\bmv\b|(?<![0-9&])>>?)[^;\n]*(?:GetFolderPath\(\s*['"]?Startup|[\\/]Startup[\\/])/i, why: 'writes to the Startup folder (persistence)' },
+  { re: /(?:Copy-Item|Move-Item|Set-Content|Add-Content|Out-File|New-Item|Tee-Object|\bcp\b|\bmv\b|\bcopy\b|\bxcopy\b|\brobocopy\b|\bmove\b|(?<![0-9&])>>?)[^;\n]*(?:GetFolderPath\(\s*['"]?Startup|[\\/]Startup[\\/])/i, why: 'writes to the Startup folder (persistence)' },
   { re: /\bschtasks(?:\.exe)?\b[^|]*\/create\b/i, why: 'creates a scheduled task (persistence)' },
   { re: /\bRegister-ScheduledTask\b/i, why: 'registers a scheduled task (persistence)' },
   // a scheduled task by another name — Register-ScheduledJob registers a PowerShell
