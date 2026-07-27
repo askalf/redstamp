@@ -171,7 +171,13 @@ export const BLACK_SHELL = [
   //     node_modules`, `find /tmp -delete`, `> /dev/null` stay clean. ---
   { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete (long flags) of root/home/system/glob' },
   { re: /\bfind\s+\/\s+[^|]*-delete\b/i, why: 'find / -delete (mass deletion)' },
-  { re: />\s*\/dev\/(?:sd|nvme|hd|disk|vd)[a-z]*\d*\b/i, why: 'overwrites a raw block device' },
+  // [a-z0-9]* (not [a-z]*\d*) so an NVMe namespace name (nvme0n1, nvme0n1p2 —
+  // digit-then-letter) is matched, not just SATA-style sda1.
+  { re: />\s*\/dev\/(?:sd|nvme|hd|disk|vd|mmcblk|loop)[a-z0-9]*\b/i, why: 'overwrites a raw block device' },
+  // wipefs/blkdiscard/sgdisk-zap of a raw block device — the sibling of the
+  // redirect and `dd of=` forms; all irrecoverably destroy the device. Scoped to
+  // a /dev/ block-device target so a bare `wipefs --help` can't match.
+  { re: /\b(?:wipefs|blkdiscard)\b[^|]*\/dev\/(?:sd|nvme|hd|vd|mmcblk|disk|loop)[a-z0-9]*\b|\bsgdisk\b[^|]*(?:-Z|--zap-all)\b[^|]*\/dev\//i, why: 'wipes/discards a raw block device' },
   { re: /\bshred\b\s+(?:-\S+\s+)*[\\/](?:etc|boot|dev|var|usr|home|root)\b/i, why: 'shreds a system file' },
   { re: /\bcipher\b[^|]*\/w:/i, why: 'cipher secure-wipe' },
   // `Users` blacks only C:\Users itself or a WHOLE profile (one segment, then
@@ -198,6 +204,25 @@ export const RED_SHELL = [
   { re: /\bdocker\s+run\b[^|]*--(?:privileged|pid[= ]host|net[= ]host|cap-add[= ]?SYS_ADMIN)/i, why: 'privileged / host-namespace container' },
   { re: /\bmount\b\s+\/dev\//i, why: 'mounts a block device' },
   { re: /\bnet\s+user\b[^|]*\/add/i, why: 'creates a user account' },
+  // setuid/setgid bit — the classic local-privesc primitive (`cp /bin/bash x;
+  // chmod u+s x`). Symbolic +s only (unambiguous); the numeric 4xxx form is left
+  // out to avoid matching a filename that happens to contain a 4-digit run.
+  { re: /\bchmod\b[^|]*[ugoa]*\+s\b/i, why: 'sets the setuid/setgid bit (privilege escalation)' },
+  // grants a privileged Linux capability to a file — setuid-equivalent.
+  { re: /\bsetcap\b[^|]*\bcap_(?:setuid|setgid|sys_admin|dac_override|dac_read_search|sys_ptrace|sys_module)\b/i, why: 'grants a privileged capability (privesc)' },
+  // loads/unloads a kernel module = ring-0 code (rootkit vector). modprobe is
+  // left out — it is the common path for legitimate driver management.
+  { re: /\b(?:insmod|rmmod)\b\s+\S/i, why: 'loads/unloads a kernel module' },
+  // bulk copy of a KNOWN-sensitive source to remote storage — exfil-shaped.
+  // Scoped to explicit credential/secret tokens so a deploy sync of build output
+  // (`aws s3 sync ./dist s3://assets`) stays clean; a bare home-dir sync is a
+  // documented residual (genuinely dual-use with a backup).
+  // `\/home\/?(?=[\s"';|&]|$)` matches a WHOLE-home sync — `/home` OR `/home/`
+  // (a trailing slash on a sync source is a no-op for both tools, so the two are
+  // identical and must classify the same) at an argument boundary — but not a
+  // named subdir (`/home/app/dist`), so deploys of build output stay clean.
+  // (`\/home\b(?!\/)` missed the trailing-slash form — redstamp#99 review.)
+  { re: /\b(?:rclone\s+(?:copy|sync|move|copyto|moveto)|aws\s+s3\s+(?:sync|cp|mv))\b(?=[^|]*(?:\.ssh\b|\.aws\b|\.env\b|\.gnupg\b|\.kube\b|id_rsa\b|id_ed25519\b|credentials\b|secring\b|\/etc\/|\/root\b|\/home\/?(?=[\s"';|&]|$)|\.git-credentials\b))/i, why: 'bulk copy of a sensitive source to remote storage (possible exfil)' },
   { re: /\bInvoke-WmiMethod\b/i, why: 'WMI method invocation' },
   // vssadmin CREATE shadow is dual-use (legit backups; also the standard prep to
   // read a locked SAM/NTDS.dit from the copy) → gate, not block. The ransomware

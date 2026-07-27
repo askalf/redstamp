@@ -129,9 +129,17 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   // — so with no judge configured it still allows (no false block), and with a
   // judge it gets deobfuscated. This is how the evasion bucket reaches the judge.
   let smells = [];
-  if (SHELL.includes(tool) && tier !== TIER.BLACK) {
-    const c = action.input?.command ?? action.input?.cmd;
-    const ctext = typeof c === 'string' ? c : inputStr;
+  // Run the obfuscation smell whenever the SHELL RULESET ran — which classify()
+  // does for a shell tool OR any non-write tool carrying a command field (the
+  // tool-spoof path a poisoned server uses). Gating this on SHELL alone left a
+  // hole: a spoofed `read`/`get` tool smuggling an obfuscated command
+  // (`X=rm;$X -rf /`, `eval "$UNSAFE"`) got the deterministic rules but never the
+  // gray flag, so the judge — which is what deobfuscates that exact residue —
+  // was never consulted, defeating the tool-spoof defense it was paired with.
+  const cmdField = action.input?.command ?? action.input?.cmd;
+  const ranShellRules = SHELL.includes(tool) || (cmdField != null && !WRITE.includes(tool));
+  if (ranShellRules && tier !== TIER.BLACK) {
+    const ctext = typeof cmdField === 'string' ? cmdField : inputStr;
     smells = obfuscationHits(ctext.length > SCAN_CAP ? ctext.slice(0, SCAN_CAP) : ctext);
     if (smells.length) why.push(...smells.map((f) => '· obfuscation smell → judge: ' + f));
   }
