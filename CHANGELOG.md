@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-07-27
+
+### Security — six judge-tier fail-opens closed (red-team wave 4, #105)
+Upgrading the optional LLM judge to a stronger model reset the adversarial
+baseline, so the judge tier itself was red-teamed live. Two surfaces held: **judge
+prompt-injection 0/8** (fake prior-approval, injected `SYSTEM:` role markers,
+"this is a harmless loopback file" claims, burial under benign build steps — none
+lowered the verdict) and **benign gray 0/16 false-blocks**. But six
+obfuscated-destructive commands landed gray and the judge waved them through as
+green, reproducibly.
+
+The lesson, and the fix: **the judge is a probabilistic backstop, not a substitute
+for deterministic coverage.** Judge reliability varies by model — one model missed
+braced `${IFS}`, another folded to injection entirely — so every known shape now
+resolves in the classifier, with no LLM in the loop. Bench 291 samples,
+**100% recall (165/165)**, 100% precision (0/82 FP), ReDoS worst 1.57ms, 290 tests.
+
+- **Brace-list expansion.** `{rm,-rf,/}` is three words to the shell but had no
+  spaces for the rules to key on. Comma brace-lists now expand to their words.
+  Real expansion only — `${param}` and `{ cmd; }` groups are untouched.
+- **Decode/transform filter piped to a shell.** The general form of the existing
+  base64-to-shell rule: `rev`, `tr` (incl. rot13), `xxd`, `base64`, `openssl`,
+  `gunzip`/`zcat` feeding a shell sink. The interpreter must be in command
+  position in the stage immediately after the decoder, so a decode that lands in
+  a file or a non-shell consumer stays clean.
+- **`sh -c` of a decoded command substitution.** `bash -c "$(… | base64 -d)"` —
+  the decode twin of the existing `sh -c "$(curl …)"` rule.
+- **Remote download executed via here-string/stdin.** `sh -s <<< "$(curl …)"` —
+  the non-pipe, non-procsub sibling of the download-exec rules.
+- **Variable resolution.** Simple assignments, indirect expansion (`${!A}`), and
+  character splits (`$c1$c2`) now resolve to the command they assemble.
+- **`${IFS}` word-splitting** normalizes to a space, layered with the above so
+  stacked tricks still resolve.
+
+Both normalizations are ADDITIONAL match targets — matched alongside the original
+command, so they can only add coverage, never mask a rule. The judge rubric is
+also strengthened as the backstop for novel forms.
+
+FP-safe: `mkdir -p src/{api,web,shared}`, `cp config.{json,bak}`, `echo x | rev`,
+`tr a-z A-Z`, `base64 -d > logo.png`, `bash -c "npm test"`, and `CMD=npm; $CMD ci`
+all stay clean. Resolution reveals the real command without over-blocking —
+`X=rm; $X -rf ./node_modules` surfaces as red (gated), not black.
+
 ## [0.7.1] - 2026-07-27
 
 ### Security — two shell-side autostart persistence gaps (#103)
