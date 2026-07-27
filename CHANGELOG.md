@@ -2,11 +2,33 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-27
+
 ### Security — evasion-hardening pass (adversarial red-team)
 A verdict-only white-box sweep (nothing executed) targeting structural seams found
-nine bypasses across five classes; all fixed, with the benign sibling of each
-pinned so the fix did not over-widen. Bench holds 97% recall / **100% precision
-(0/76 FP)** after the additions; ReDoS worst-case 1.6ms.
+nine command-class bypasses (below) plus four parser/tokenizer differentials
+(further down); all fixed, with the benign sibling of each pinned so the fix did
+not over-widen. Bench: 286 samples, 97% recall / **100% precision (0/80 FP)**;
+ReDoS worst-case 1.9ms.
+
+**Parser/tokenizer differentials — the classifier and the shell disagreeing about
+the same bytes (each was invisible: green, not even gray-routed):**
+- **A `#` comment runs to end-of-LINE, not end-of-script.** The quoted-data
+  neutralizer discarded everything after the first `#`, so a destructive command
+  on a *later* line was scrubbed before the rules saw it. It now skips only to the
+  newline.
+- **Command substitution inside a "prose" flag executes.** `$(…)`/backticks in a
+  double-quoted `--body`/`-m` arg run before the arg is passed, but the neutralizer
+  blanked them as inert data. Double-quoted args containing `$(`/backtick now stay
+  visible; single-quoted stays inert, and a benign `-m "$(date)"` stays clean.
+- **Backslash-escaped keywords/targets.** `r\m -rf /` and `rm -rf \/` run as
+  `rm -rf /`; the unix rules now also match a backslash-de-escaped copy, while the
+  original is still matched so Windows path separators are untouched.
+- **Quoted / paren-terminated root target.** `rm -rf "/"`, `rm -rf '/'`,
+  `$(rm -rf /)` and `bash -c $'rm -rf /'` only gated before; the root anchor now
+  treats a quoted or separator-terminated root the same as a bare one (black).
+
+**Command-class bypasses:**
 - **Tool-spoof path never reached the obfuscation judge.** `classify()` runs the
   shell ruleset for a non-shell tool that carries a `command` field (the poisoned-
   server path), but the gray "→ judge" router only fired for `SHELL` tools — so an
