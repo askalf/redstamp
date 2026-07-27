@@ -4,10 +4,16 @@
 
 > _**Formerly `warden`.** Renamed to `redstamp` for the npm release; the GitHub repo redirects and the legacy `warden*` CLI aliases keep working. Env vars keep the `WARDEN_` prefix for compatibility._
 
+[![npm version](https://img.shields.io/npm/v/@askalf/redstamp?logo=npm)](https://www.npmjs.com/package/@askalf/redstamp)
 [![ci](https://github.com/askalf/redstamp/actions/workflows/ci.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/askalf/redstamp/actions/workflows/codeql.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askalf/redstamp/badge)](https://scorecard.dev/viewer/?uri=github.com/askalf/redstamp)
+<!-- OpenSSF Best Practices — uncomment once enrolled at https://www.bestpractices.dev and replace PROJECT_ID:
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
+-->
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
+[![downloads](https://img.shields.io/npm/dm/@askalf/redstamp?color=blue)](https://www.npmjs.com/package/@askalf/redstamp)
 [![threat model](https://img.shields.io/badge/threat_model-SECURITY.md-informational)](SECURITY.md)
 
 Autonomous agents are a machine for turning your bank balance — and your blast radius — into tool calls. OpenClaw hit ~180k stars and then became 2026's first big AI security disaster: one-click RCE, a poisoned skills marketplace, tens of thousands of instances exposed with no auth. **redstamp is the layer that stops that.**
@@ -176,6 +182,8 @@ npm run arena
 ## The agent-security stack
 
 Three composable layers, one defense: **[redstamp](https://github.com/askalf/redstamp)** contains the call *(you are here)* · **[truecopy](https://github.com/askalf/truecopy)** vets the tool · **[strongroom](https://github.com/askalf/strongroom)** holds the keys. Run all three together → **[agent-security-stack](https://github.com/askalf/agent-security-stack)**.
+
+**Related:** **[plumbline](https://github.com/askalf/plumbline)** — own your agent trajectory: out-of-band, read-only monitoring of the whole action sequence against the declared job. It sits *above* the three in-path layers and never blocks an action; it catches escapes assembled from individually-authorized steps.
 
 ---
 Part of **[Own Your Agent Security](https://github.com/askalf/agent-security-stack)** — own your AI infrastructure instead of renting it. Built by Thomas Sprayberry.
