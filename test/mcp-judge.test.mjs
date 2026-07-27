@@ -21,7 +21,12 @@ const spyJudge = (tier, reason = 'stub') => {
 };
 
 // Obfuscated shell: deterministic classifier returns green but marks it gray.
-const GRAY_CMD = ['X=rm; $X -rf ', '/'].join('');
+// A genuinely gray command: `eval` of a runtime variable the firewall cannot
+// see the value of — smell-flagged, deterministically green (no static resolution
+// possible), so it truly exercises the judge path. (The old `X=rm; $X -rf /`
+// fixture graduated to a DETERMINISTIC block once variable-resolution landed in
+// classify(), so it no longer reaches the judge — see the red-team-wave-4 tests.)
+const GRAY_CMD = 'eval "$PAYLOAD"';
 
 test('guardMcpCallAsync without a judge is identical to guardMcpCall', async () => {
   const req = { params: { name: 'run_command', arguments: { command: 'ls -la' } } };
