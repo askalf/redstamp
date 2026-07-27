@@ -120,3 +120,25 @@ test('a quoted / paren-terminated root target is still a root delete', () => {
   // a specific subdir is not root — stays out of black.
   assert.notEqual(tier(S('rm -rf "/tmp/cache"')), TIER.BLACK);
 });
+
+// ── Autostart-via-shell gaps (found while making a daemon boot-persistent) ───
+// The shell persistence rules caught Copy-Item/cp into Startup and writes to
+// /etc/* and rc-files, but missed two real install paths.
+
+test('cmd.exe copy/move INTO the Startup folder is persistence', () => {
+  // The rule had the PowerShell + unix verbs but not cmd's copy/xcopy/move —
+  // and a folder target (no filename, source keeps its name) is a valid install.
+  assert.equal(tier(S('copy evil.exe "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"')), TIER.BLACK);
+  assert.equal(tier(S('xcopy evil.exe "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\" /y')), TIER.BLACK);
+  assert.equal(tier(S('move evil.exe "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"')), TIER.BLACK);
+  // a benign local copy/move and a file merely NAMED startup stay clean.
+  assert.notEqual(tier(S('copy build.exe dist\\build.exe')), TIER.BLACK);
+  assert.notEqual(tier(S('cp notes.txt ~/startup-guide.txt')), TIER.BLACK);
+});
+
+test('shell write to XDG autostart (~/.config/autostart) is persistence', () => {
+  assert.equal(tier(S('cp evil.desktop ~/.config/autostart/evil.desktop')), TIER.BLACK);
+  assert.equal(tier(S('echo "[Desktop Entry]" > ~/.config/autostart/evil.desktop')), TIER.BLACK);
+  // a non-autostart .config path is not persistence.
+  assert.notEqual(tier(S('cp config.yaml ~/.config/myapp/config.yaml')), TIER.BLACK);
+});
