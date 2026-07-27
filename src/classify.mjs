@@ -43,7 +43,7 @@ export const BLACK_SHELL = [
   // bounded quantifiers (no adjacent `[a-z]*r[a-z]*`, no unbounded lazy gap) so a
   // long flag run like `rm -rrr…` can't trigger quadratic backtracking (ReDoS):
   // find a dash-flag containing r (recursive) then a catastrophic target nearby.
-  { re: /\brm\s+[^|]{0,40}?-(?=[a-z]{0,12}r)[a-z]{1,12}\b[^|]{0,200}?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
+  { re: /\brm\s+[^|]{0,40}?-(?=[a-z]{0,12}r)[a-z]{1,12}\b[^|]{0,200}?(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s\\][/~]["'\s]*(?:$|[;|&)])|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete of root/home/system/glob' },
   { re: /\bmkfs(\.\w+)?\b/i, why: 'format filesystem' },
   { re: /\bdd\b[^|]*\bof=\/dev\/(sd|nvme|disk)/i, why: 'raw disk overwrite' },
   { re: /:\(\)\s*\{\s*:\s*\|\s*:?\s*&\s*\}\s*;\s*:/, why: 'fork bomb' },
@@ -169,7 +169,7 @@ export const BLACK_SHELL = [
   { re: /\bdocker\s+run\b(?=[^|]*--pid[= ]host\b)(?=[^|]*--privileged\b)/i, why: 'privileged host-pid container (escape)' },
   // --- destructive (more). Drive-root / system targets only; `Remove-Item
   //     node_modules`, `find /tmp -delete`, `> /dev/null` stay clean. ---
-  { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete (long flags) of root/home/system/glob' },
+  { re: /\brm\b(?=[^|]*--recursive\b)(?=[^|]*--force\b)[^|]*(?:--no-preserve-root|\s[/~]\s*$|\s~\/?\s*$|["'\s\\][/~]["'\s]*(?:$|[;|&)])|["'\s]\$\{?HOME\b|\s\/?\*|\s\/(?:etc|usr|var|bin|lib|boot|sys|root|home|opt)(?:\/?\s|\/?$))/i, why: 'recursive force-delete (long flags) of root/home/system/glob' },
   { re: /\bfind\s+\/\s+[^|]*-delete\b/i, why: 'find / -delete (mass deletion)' },
   // [a-z0-9]* (not [a-z]*\d*) so an NVMe namespace name (nvme0n1, nvme0n1p2 —
   // digit-then-letter) is matched, not just SATA-style sda1.
@@ -283,12 +283,24 @@ export function neutralizeQuotedData(cmd) {
       if (tok) onToken();
       let j = i + 1; while (j < cmd.length && cmd[j] !== ch) j++;
       const closed = j < cmd.length;
-      out += ch + ((blankNext || grepPending) ? '' : cmd.slice(i + 1, j)) + (closed ? ch : '');
+      const inner = cmd.slice(i + 1, j);
+      // A DOUBLE-quoted string containing $(…) or a backtick EXECUTES that
+      // substitution before the arg is passed — so a "prose" flag like
+      // `--body "$(rm -rf /)"` is NOT inert data and must stay visible to the
+      // rules. Single-quoted content never executes, so it's always safe to blank.
+      const executes = ch === '"' && /\$\(|`/.test(inner);
+      const blank = (blankNext || grepPending) && !executes;
+      out += ch + (blank ? '' : inner) + (closed ? ch : '');
       i = closed ? j + 1 : j; blankNext = false; grepPending = false; continue;
     }
-    // an unquoted `#` at a word boundary starts a shell comment — nothing after
-    // it executes, so drop the rest (`ls # rm -rf /` is data, not a live delete).
-    if (ch === '#' && (out === '' || /\s$/.test(out))) break;
+    // an unquoted `#` at a word boundary starts a shell comment — but only to the
+    // END OF THE LINE, not end of script. Skip the comment text and keep going;
+    // a command on a LATER line still executes (`ls # note\nrm -rf /`). The old
+    // `break` dropped everything after the first `#`, hiding the second line.
+    if (ch === '#' && (out === '' || /\s$/.test(out))) {
+      while (i < cmd.length && cmd[i] !== '\n') i++;
+      tok = ''; blankNext = false; grepPending = false; continue;
+    }
     if (/\s/.test(ch)) { if (tok) onToken(); out += ch; i++; continue; }
     if (ch === '|' || ch === ';' || ch === '&') { tok = ''; blankNext = false; grepPending = false; out += ch; i++; continue; }
     tok += ch; out += ch; i++;
@@ -333,9 +345,18 @@ export function classify(action) {
     // Only for genuine string commands — a stringified object/array payload must
     // be matched whole (its dangerous content is the attack, not "data").
     const mcmd = typeof cmdField === 'string' ? neutralizeQuotedData(cmd) : cmd;
-    for (const p of BLACK_SHELL) if (p.re.test(mcmd) && (!p.gate || p.gate(cmd))) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
-    for (const p of RED_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
-    for (const p of YELLOW_SHELL) if (p.re.test(mcmd)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
+    // Also match a backslash-de-escaped copy. Outside quotes the shell drops a
+    // backslash before an ordinary character, so `r\m -rf /` RUNS as `rm -rf /`
+    // and `rm -rf \/` as `rm -rf /` — a regex over the raw string never sees the
+    // keyword. Strip `\` before an ASCII letter or `/` and match that too. The
+    // ORIGINAL is still matched (targets includes mcmd), so Windows path
+    // separators (`C:\Windows`) are untouched by the Windows rules.
+    const dcmd = mcmd.replace(/\\([A-Za-z/])/g, '$1');
+    const targets = dcmd !== mcmd ? [mcmd, dcmd] : [mcmd];
+    const hits = (re) => targets.some((t) => re.test(t));
+    for (const p of BLACK_SHELL) if (hits(p.re) && (!p.gate || p.gate(cmd))) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
+    for (const p of RED_SHELL) if (hits(p.re)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
+    for (const p of YELLOW_SHELL) if (hits(p.re)) { tier = worst(tier, TIER.YELLOW); why.push('· ' + p.why); }
     // a shell executor RUNS its quoted body — `bash -c "rm -rf /"`, `eval "…"` —
     // so classify that body at a clean boundary (where `rm -rf /` matches black),
     // not as gated text. (echo "rm -rf /" has no executor → stays gated.)
