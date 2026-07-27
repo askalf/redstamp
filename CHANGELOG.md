@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-27
+
+### Security — two shell-side autostart persistence gaps (#103)
+Found while making a warden daemon boot-persistent on a headless box. Both are a
+SHELL command reaching an autostart location the shell rules didn't fully cover.
+Bench 291 samples, 97% recall / 100% precision (0/82 FP); ReDoS clean.
+- **cmd.exe copy/move into the Startup folder.** The "writes to the Startup
+  folder" rule had the PowerShell cmdlets + unix `cp`/`mv` but not cmd's
+  `copy`/`xcopy`/`robocopy`/`move`, so a copy of a file into the `…\Startup\`
+  folder (directory target — the source keeps its name) was green. cmd verbs added.
+- **Shell write to XDG autostart** (`~/.config/autostart/*.desktop`). The
+  persistence-file rule covered `/etc/{cron,systemd,sudoers,…}` and rc-files but
+  not the per-user desktop-autostart dir a DE runs at login; the path was in
+  `PERSISTENCE_PATH_RE` (WRITE-tool paths only), now in the shell rule too.
+
+  FP-safe: a benign local `copy build.exe dist\build.exe`, a `cp` to a
+  non-autostart `~/.config/myapp/`, and a file merely NAMED `startup-guide.txt`
+  all stay clean.
+
 ## [0.7.0] - 2026-07-27
 
 ### Security — evasion-hardening pass (adversarial red-team)
