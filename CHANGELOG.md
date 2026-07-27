@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Security — evasion-hardening pass (adversarial red-team)
+A verdict-only white-box sweep (nothing executed) targeting structural seams found
+nine bypasses across five classes; all fixed, with the benign sibling of each
+pinned so the fix did not over-widen. Bench holds 97% recall / **100% precision
+(0/76 FP)** after the additions; ReDoS worst-case 1.6ms.
+- **Tool-spoof path never reached the obfuscation judge.** `classify()` runs the
+  shell ruleset for a non-shell tool that carries a `command` field (the poisoned-
+  server path), but the gray "→ judge" router only fired for `SHELL` tools — so an
+  obfuscated command smuggled through a spoofed `read`/`get` tool
+  (`X=rm;$X -rf /`, `eval "$UNSAFE"`) got neither a deterministic block nor a judge
+  look, defeating the exact defense the tool-spoof classification was paired with.
+  The router now fires whenever the shell ruleset ran. It adds only gray-routing,
+  never a block — no false-positive surface.
+- **Raw block-device destruction beyond `>` / `dd of=`.** `wipefs`, `blkdiscard`
+  and `sgdisk --zap-all` of a `/dev/` device are now black, siblings of the
+  existing redirect/`dd` rules. Fixed an NVMe-naming blind spot in the process:
+  the device charclass (`[a-z]*\d*`) could not match `nvme0n1` (digit-then-letter),
+  which also affected the pre-existing redirect-to-device rule — both broadened to
+  `[a-z0-9]*`.
+- **Privilege escalation.** `chmod +s`/`u+s` (setuid/setgid bit) and `setcap
+  cap_setuid`/`sys_admin`/… now gate (red). Symbolic `+s` only, so `chmod +x` and
+  numeric modes like `755` stay clean.
+- **Kernel-module load/unload.** `insmod`/`rmmod` gate (red) — ring-0 code, a
+  rootkit vector; `modprobe` is intentionally excluded as the common legitimate
+  path.
+- **Bulk copy of a sensitive source to remote storage.** `rclone copy` and
+  `aws s3 sync|cp|mv` gate (red) when the source is a known credential/secret path
+  or a whole-home tree; a deploy sync of build output
+  (`aws s3 sync ./dist s3://…`, or a specific `/home/app/dist` subdir) stays clean.
+
 ### Added
 - **`guardMcpCallAsync` — the MCP surface can finally reach the LLM judge.**
   `guardMcpCall` is synchronous, and `guardHandler`, though async, called it — so
