@@ -38,7 +38,13 @@ export const SECRET_ENV_RE = /\$\{?[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDEN
 // end of the text (`read ~/.aws/`) becomes `...~/.aws/"`, where the real `/` sits
 // right before the string's own closing quote — guarding `/` there would be a
 // false NEGATIVE in a security scanner (the reviewer's blocking catch on #92).
-export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|\.aws(?:\/|\\(?!"))|\.ssh(?:\/|\\(?!"))|\.gnupg(?:\/|\\(?!"))|secring\.gpg\b|\.npmrc|credentials\.json|\.git-credentials|\.kube(?:\/|\\(?!"))config|(?:\/|\\(?!"))\.claude(?:\/|\\(?!"))|(?:\/|\\(?!"))\.askalf(?:\/|\\(?!"))|(?:Chrome|Chromium|Edge|Brave|Opera|Vivaldi|Firefox|Safari|User\s?Data|Default|Profile\s?\d*)(?:\/|\\{1,2}(?!"))(?:[\w.-]{1,24}(?:\/|\\{1,2}(?!")))?(?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker(?:\/|\\(?!"))config\.json|\.netrc\b|(?:\/|\\(?!"))gh(?:\/|\\(?!"))hosts\.yml|(?:\/|\\(?!"))gcloud(?:\/|\\(?!"))|(?:\/|\\(?!"))\.azure(?:\/|\\(?!"))|serviceaccount(?:\/|\\(?!"))token|\.pgpass\b|rclone\.conf|credentials\.tfrc|(?:\/|\\(?!"))etc(?:\/|\\(?!"))shadow\b)/i;
+// A DIRECTORY-style alternative also needs a guard on its LEFT: a word character
+// before `.aws` means a hostname label, not a path component. `www.repost.aws/`
+// (AWS re:Post) satisfied `\.aws(?:\/…)` because a URL supplies the trailing
+// slash the #86 fix asked for, so the domain read as `~/.aws/`. Bare-FILENAME
+// alternatives (`.npmrc`, `.netrc`, `.pgpass`) deliberately keep no guard —
+// `project.npmrc` really is an npmrc, and guarding it would false-negative.
+export const SENSITIVE_PATH_RE = /((?<!\w)\.env\b|(?<![\w-])\.aws(?:\/|\\(?!"))|(?<![\w-])\.ssh(?:\/|\\(?!"))|(?<![\w-])\.gnupg(?:\/|\\(?!"))|secring\.gpg\b|\.npmrc|credentials\.json|\.git-credentials|(?<![\w-])\.kube(?:\/|\\(?!"))config|(?:\/|\\(?!"))\.claude(?:\/|\\(?!"))|(?:\/|\\(?!"))\.askalf(?:\/|\\(?!"))|(?:Chrome|Chromium|Edge|Brave|Opera|Vivaldi|Firefox|Safari|User\s?Data|Default|Profile\s?\d*)(?:\/|\\{1,2}(?!"))(?:[\w.-]{1,24}(?:\/|\\{1,2}(?!")))?(?:Cookies|Login Data)\b|key4\.db|logins\.json|\.docker(?:\/|\\(?!"))config\.json|\.netrc\b|(?:\/|\\(?!"))gh(?:\/|\\(?!"))hosts\.yml|(?:\/|\\(?!"))gcloud(?:\/|\\(?!"))|(?:\/|\\(?!"))\.azure(?:\/|\\(?!"))|serviceaccount(?:\/|\\(?!"))token|\.pgpass\b|rclone\.conf|credentials\.tfrc|(?:\/|\\(?!"))etc(?:\/|\\(?!"))shadow\b)/i;
 // Cloud-instance-metadata hosts, incl. the common numeric encodings of the AWS
 // IMDS IP (169.254.169.254 → decimal/hex/octal) used to evade literal matching.
 export const METADATA_RE = /\b(?:169\.254\.169\.254|2852039166|0xa9fea9fe|0251\.0376\.0251\.0376|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200)\b|\[?(?:fd00:ec2::254|::ffff:a9fe:a9fe)\]?/i;
@@ -71,7 +77,22 @@ export const B64_TO_SHELL_RE = new RegExp(`${B64_DECODE}[^|\\n]{0,40}${PIPE_TO_S
 // unrelated rows of a table read as one verb→object→destination (found scanning
 // real marketplace skills). Defined here because both SENSITIVE_PATH_EXFIL_RE
 // and EXFIL_INTENT_RE below are built from it.
-const CLAUSE_GAP = (n) => `(?:(?!\\\\n)[^.\\n]){0,${n}}`;
+//
+// A `.` ends the clause only as SENTENCE punctuation. It used to end the clause
+// unconditionally, which severed the gap on any dotted token -- and the tokens
+// that matter here are credential FILENAMES, so the rule missed exactly what it
+// exists to catch: `cat ~/.claude/.credentials.json and upload to https://…`,
+// `read ~/.aws/credentials.json and post it to …`, `copy ~/.ssh/id_rsa.pem and
+// send to …` all scored clean, while the same sentences with an extension-less
+// path (`~/.aws/credentials`) fired. Only paths whose whole filename is baked
+// into one alternative (`.docker/config.json`) escaped it, by consuming the dots
+// before the gap began.
+//
+// So: a dot followed by an alphanumeric is intra-token (`.json`, `.pem`, `v1.2`)
+// and does not break the clause; a dot followed by space/end still does. The two
+// branches are mutually exclusive (dot vs non-dot), so the quantifier stays
+// unambiguous and linear -- bench/redos.mjs covers the shape.
+const CLAUSE_GAP = (n) => `(?:(?!\\\\n)(?:[^.\\n]|\\.(?=[A-Za-z0-9_-]))){0,${n}}`;
 
 // "Somewhere off this machine" — the destination half of an exfil. Shared by
 // EXFIL_INTENT_RE and SENSITIVE_PATH_EXFIL_RE so the two cannot spell it
