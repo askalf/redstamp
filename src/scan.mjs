@@ -93,11 +93,11 @@ const EXFIL_NOUN = String.raw`(?<![\w-])(?:secrets?|credentials?|api[ _-]?keys?|
 // filename (`.aws/credentials`). Reused rather than re-spelled so the
 // credential-file list stays in lockstep with the path scanner.
 const EXFIL_OBJECT = String.raw`(?:${EXFIL_NOUN}|${SENSITIVE_PATH_RE.source})`;
-// Looser objects, accepted only AFTER the verb. "exfiltrate your data" / "leak
-// the env" is exfil phrasing; "the training data leak future patterns" is the
-// ordinary resource-leak sentence this rule keeps mistaking for one, and it
-// reads object-before-verb. Direction is the whole discriminator, so these are
-// deliberately absent from the reverse branch.
+// Looser objects. "exfiltrate your data" / "leak the env" is exfil phrasing;
+// "the training data leak future patterns" is the ordinary resource-leak sentence
+// this rule keeps mistaking for one, and it reads object-before-verb. Direction
+// was the whole discriminator, and now that only the forward branch survives
+// (see EXFIL_INTENT_RE) these ride along with it for free.
 const EXFIL_OBJECT_LOOSE = String.raw`(?<![\w-])(?:data|env)(?![\w-])`;
 // 'exfiltration intent' — the bare words `exfiltrate` / `leak` / `steal` used to
 // fire on their own, which made this the noisiest rule in the set. Auditing
@@ -111,10 +111,23 @@ const EXFIL_OBJECT_LOOSE = String.raw`(?<![\w-])(?:data|env)(?![\w-])`;
 // So the word now needs EVIDENCE of an actual exfil in the same clause:
 //   forward — verb → (an object worth taking | a destination to send it to)
 //             "exfiltrate the private key", "leak the results to https://…"
-//   reverse — object → verb  ("API keys can leak")
-// The reverse direction deliberately takes the strict OBJECT only: a destination
-// naturally follows the verb, so `https://… <60 chars> steal` is doc prose, not
-// phrasing anyone exfiltrates in.
+//
+// The REVERSE direction (object → verb, "API keys can leak") used to fire too and
+// has been REMOVED — measured, not argued:
+//   - across 1,885 marketplace skills it produced 26 hits and EVERY one was
+//     defensive security prose: "secrets may leak into logs", "Rotate client
+//     secrets if they leak", "so even an echoed error cannot leak the password",
+//     "If app credentials leak, a tight ACL bounds the blast radius", and a code
+//     comment reading "// Loader keys must not leak into entries" (not even a
+//     secret — `keys?` matching a loader key). Zero true positives.
+//   - removing it costs NOTHING on the malicious side: bench recall stays
+//     165/165. It never caught an attack, because object-before-verb is
+//     statement-shaped — "tokens can leak" WARNS about a risk. An instruction
+//     names what to take, which is the forward branch, and if it also names a
+//     destination the forward branch matches that too.
+// So a reverse match only ever meant "this document discusses leaks" — which is
+// exactly what security documentation does, and this rule already exists because
+// that prose kept being published as an exfiltration verdict against a vendor.
 //
 // This is a NARROWING, and its false-negative cost is close to nil: a real
 // instruction has to name what it takes or where it goes, and every phrasing
@@ -131,8 +144,7 @@ const EXFIL_OBJECT_LOOSE = String.raw`(?<![\w-])(?:data|env)(?![\w-])`;
 // the match stays linear — bench/redos.mjs covers the shape.
 const EXFIL_WORD = String.raw`(?<![\w-])(?:exfiltrate|leak|steal)(?![\w-])`;
 export const EXFIL_INTENT_RE = new RegExp(
-  `${EXFIL_WORD}${CLAUSE_GAP(60)}(?:${EXFIL_OBJECT}|${EXFIL_OBJECT_LOOSE}|${EXFIL_DEST})` +
-  `|${EXFIL_OBJECT}${CLAUSE_GAP(60)}${EXFIL_WORD}`,
+  `${EXFIL_WORD}${CLAUSE_GAP(60)}(?:${EXFIL_OBJECT}|${EXFIL_OBJECT_LOOSE}|${EXFIL_DEST})`,
   'i');
 
 export const INJECTION_RE = [
