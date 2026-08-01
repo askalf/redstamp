@@ -1,0 +1,35 @@
+{
+  "name": "@askalf/redstamp",
+  "version": "0.0.3",
+  "description": "POINTER PACKAGE — redstamp is not distributed on npm. Install the Sigstore-signed release from https://github.com/askalf/redstamp/releases. A deterministic firewall for AI agent tool calls (Own Your Stack).",
+  "keywords": [
+    "agent",
+    "security",
+    "mcp",
+    "llm",
+    "guardrails",
+    "ai-safety",
+    "firewall",
+    "own-your-stack"
+  ],
+  "homepage": "https://github.com/askalf/redstamp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/askalf/redstamp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/askalf/redstamp/issues"
+  },
+  "license": "MIT",
+  "author": "askalf",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
