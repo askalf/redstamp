@@ -62,10 +62,17 @@ jobs:
         run: |
           marker='<!-- redstamp-npm-drift -->'
           existing=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[0].number // ""')
-          if [ -n "$existing" ]; then
-            echo "Existing open drift issue #$existing — leaving alone."
-            exit 0
-          fi
+
+          # Dedup WITHOUT freezing. This used to `exit 0` on an existing issue,
+          # which stopped it duplicating but also stopped it updating — so the
+          # numbers froze at whenever the issue was first opened while the watch
+          # kept reporting success daily. Observed 2026-08-01: issue #55 said
+          # release 0.4.1 in its body and 0.6.0 in its title, with the actual
+          # release at v0.7.3 and 41 consecutive green runs behind it. A stale
+          # alert is worse than a loud one: it gets read once, disbelieved, and
+          # then ignored.
+          #
+          # One issue, always current. The body is rebuilt below either way.
 
           body_file=$(mktemp)
           {
@@ -93,11 +100,24 @@ jobs:
             --description "npm registry out of sync with the latest GitHub release" \
             --color D93F0B --force
 
-          gh issue create \
-            -R "${{ github.repository }}" \
-            --title "npm drift: registry (${NPM_V}) != latest release (${RELEASE_V})" \
-            --body-file "$body_file" \
-            --label "npm-drift"
+          title="npm drift: registry (${NPM_V}) != latest release (${RELEASE_V})"
+
+          if [ -n "$existing" ]; then
+            # Refresh in place: same issue, current numbers, no new notification
+            # storm. Title carries the versions too, so it must move as well —
+            # a correct body under a stale title is still a stale alert.
+            gh issue edit "$existing" \
+              -R "${{ github.repository }}" \
+              --title "$title" \
+              --body-file "$body_file"
+            echo "Refreshed existing drift issue #$existing -> npm ${NPM_V} vs release ${RELEASE_V}"
+          else
+            gh issue create \
+              -R "${{ github.repository }}" \
+              --title "$title" \
+              --body-file "$body_file" \
+              --label "npm-drift"
+          fi
 
       - name: Auto-close any open drift issue on sync
         if: steps.check.outputs.in_sync == 'true'
