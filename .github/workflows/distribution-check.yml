@@ -1,0 +1,159 @@
+name: distribution check
+
+# Daily check that redstamp's ACTUAL distribution is intact.
+#
+# This replaces the old npm-drift watch, which compared npm's published version
+# against the latest GitHub release. That comparison is now permanently false by
+# design: npm's registry content-scan rejects redstamp's real tarball (its
+# classify.mjs signature dictionary reads as malware) and an allowlist review was
+# declined, so `@askalf/redstamp` on npm is a deliberate, deprecated pointer stub
+# (npm-stub/) and will never match the release. A watch that can only ever fail
+# is noise — it kept issue #55 open from 2026-07-11 with "to fix" steps that
+# could not work.
+#
+# What is worth watching instead is that the real distribution still works:
+#
+#  1. The latest GitHub release still ships BOTH `redstamp.tgz` and its
+#     `redstamp.tgz.sigstore.json` provenance. This is the documented install;
+#     a release that ships without them breaks it silently.
+#  2. npm's `@askalf/redstamp` is still a 0.0.x pointer — if a real version ever
+#     appears there, either npm relented (good news, act on it) or something
+#     published by mistake (bad news, act faster).
+#  3. That pointer is still DEPRECATED and its notice still points home. If the
+#     deprecation were cleared, `npm i @askalf/redstamp` would install a package
+#     that throws on import with no warning at all.
+#
+# No checkout / setup-node: `npm view` and `gh release view` are pure remote
+# reads; the runner's preinstalled npm + gh are enough.
+#
+# Triggers:
+#  - daily at 04:17 UTC (off-peak, offset minute to avoid stacking)
+#  - workflow_dispatch for manual verification right after a release
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  distribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write # open/close the distribution alert issue
+    steps:
+      - name: Check release assets and the npm pointer
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          problems=""
+
+          release_tag=$(gh release view -R "${{ github.repository }}" --json tagName --jq .tagName)
+          assets=$(gh release view "$release_tag" -R "${{ github.repository }}" --json assets --jq '[.assets[].name] | join(" ")')
+          echo "release ${release_tag} assets: ${assets}"
+
+          case " $assets " in
+            *" redstamp.tgz "*) ;;
+            *) problems="${problems}- Release \`${release_tag}\` is missing \`redstamp.tgz\` — the documented install (\`gh release download\`) is broken.\n" ;;
+          esac
+          case " $assets " in
+            *" redstamp.tgz.sigstore.json "*) ;;
+            *) problems="${problems}- Release \`${release_tag}\` is missing \`redstamp.tgz.sigstore.json\` — \`gh attestation verify\` cannot succeed, so the verify-before-install step in the README fails.\n" ;;
+          esac
+
+          npm_v=$(npm view @askalf/redstamp version)
+          # `npm view <pkg> deprecated` prints nothing when the package is not deprecated.
+          npm_dep=$(npm view @askalf/redstamp deprecated 2>/dev/null || true)
+          echo "npm latest: ${npm_v} | deprecated: ${npm_dep:-<not deprecated>}"
+
+          case "$npm_v" in
+            0.0.*) ;;
+            *) problems="${problems}- npm \`@askalf/redstamp\` is at \`${npm_v}\`, which is not a 0.0.x pointer version. Either npm allowlisted the real package (update the docs and the release flow) or something published by mistake.\n" ;;
+          esac
+
+          if [ -z "$npm_dep" ]; then
+            problems="${problems}- The npm pointer stub is NOT deprecated. \`npm i @askalf/redstamp\` now installs a package that throws on import with no warning. Re-apply: see \`npm-stub/HOW-TO-PUBLISH.md\`.\n"
+          else
+            case "$npm_dep" in
+              *"github.com/askalf/redstamp/releases"*) ;;
+              *) problems="${problems}- The npm deprecation notice no longer points at the GitHub releases page. Current text: \`${npm_dep}\`\n" ;;
+            esac
+          fi
+
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "npm_v=${npm_v}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'problems<<PROBLEMS_EOF'
+            printf '%b' "$problems"
+            echo 'PROBLEMS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          if [ -n "$problems" ]; then
+            echo "::error::redstamp distribution check failed"
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or refresh the alert issue
+        if: steps.check.outputs.healthy != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.check.outputs.release_tag }}
+          NPM_V: ${{ steps.check.outputs.npm_v }}
+          PROBLEMS: ${{ steps.check.outputs.problems }}
+        run: |
+          marker='<!-- redstamp-distribution-check -->'
+          existing=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[0].number // ""')
+
+          # One issue, always current — refresh in place rather than freezing or
+          # duplicating. A stale alert gets read once, disbelieved, then ignored.
+          body_file=$(mktemp)
+          {
+            echo "$marker"
+            echo ""
+            echo "### redstamp's distribution is not intact"
+            echo ""
+            printf '%s\n' "$PROBLEMS"
+            echo ""
+            echo "| surface | state |"
+            echo "|---|---|"
+            echo "| latest GitHub release | \`${RELEASE_TAG}\` |"
+            echo "| npm latest (expected: a deprecated 0.0.x pointer) | \`${NPM_V}\` |"
+            echo ""
+            echo "Background: redstamp is distributed as a Sigstore-signed GitHub release tarball, not on npm — npm's content scan rejects the real package and an allowlist review was declined. See \`npm-stub/HOW-TO-PUBLISH.md\`."
+            echo ""
+            echo "This issue auto-closes when the next check passes."
+            echo ""
+            echo "[Run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } > "$body_file"
+
+          gh label create distribution -R "${{ github.repository }}" \
+            --description "redstamp's signed-release distribution or npm pointer is broken" \
+            --color D93F0B --force
+
+          title="distribution check failed: release ${RELEASE_TAG} / npm ${NPM_V}"
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" -R "${{ github.repository }}" --title "$title" --body-file "$body_file"
+            echo "Refreshed existing distribution issue #$existing"
+          else
+            gh issue create -R "${{ github.repository }}" --title "$title" --body-file "$body_file" --label "distribution"
+          fi
+
+      - name: Auto-close the alert issue when healthy
+        if: steps.check.outputs.healthy == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          marker='<!-- redstamp-distribution-check -->'
+          open_issues=$(gh issue list -R "${{ github.repository }}" --state open --search "in:body $marker" --json number --jq '.[].number')
+          for n in $open_issues; do
+            gh issue close "$n" -R "${{ github.repository }}" --comment "Auto-closed: the signed release and the npm pointer are both intact again on [run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          done
