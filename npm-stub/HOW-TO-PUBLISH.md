@@ -13,10 +13,26 @@ publishes fine; that was proven by the `0.0.2-diag.0` canary.
 
 Run from **this directory**, with an npm account that owns the `@askalf` scope:
 
-```sh
-cd npm-stub
-npm publish --access public
+The account's second factor is a **security key (WebAuthn), not TOTP** — so
+there is no code to type and `--otp=` is impossible. A plain `npm publish`
+therefore dies with `EOTP`, and no account-level 2FA setting fixes it. Use the
+browser ceremony instead, in a **real PowerShell window**:
+
+```powershell
+cd "C:\Users\masterm1nd\Desktop\codebase\warden\npm-stub"
+npx.cmd npm@latest publish --access public
 ```
+
+Three details, each of which has cost an attempt before:
+
+- **A real terminal, not an agent shell.** Claude Code / CI shells are
+  non-TTY and the ceremony cannot run there.
+- **`npx.cmd npm@latest`**, because the box's npm (10.x) lacks the web-auth
+  publish flow — npm 12 has it.
+- **`.cmd`, never the `.ps1` shim**, which the execution policy blocks.
+
+npm prints an `npmjs.com/auth/cli/…` URL; approve it with the key and the
+publish completes.
 
 `files` limits the tarball to `index.mjs` (npm always adds `package.json`,
 `README.md`, `LICENSE`). Nothing from the parent repo is included — in
