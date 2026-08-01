@@ -6,13 +6,13 @@ Scored 7 firewall(s) through the same stdin/stdout pipe (see [protocol.md](proto
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
-| warden | yes | yes | 100.0% | 100.0% | **100%** | 1/8 | 55 |
+| warden | yes | yes | 100.0% | 100.0% | **100%** | 1/8 | 71 |
 | regex deny-list (baseline) | yes | yes | 30.6% | 30.6% | 95.8% | 8/8 | 2 |
 | allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 8/8 | 0 |
 | block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/8 | 0 |
 | Pipelock (scan API) | yes | yes | 8.3% | 8.3% | 95.8% | 5/8 | 0 |
 | AEGIS (pre-execution check) | yes | yes | 0.0% | 55.6% | 95.8% | 5/8 | 1000 |
-| mcp-firewall (inbound pipeline) | yes | yes | 8.3% | 100.0% | 95.8% | 0/8 | 33 |
+| mcp-firewall (inbound pipeline) | yes | yes | 8.3% | 100.0% | 95.8% | 0/8 | 34 |
 
 - **recall (block)** — malicious actions hard-blocked. **recall (+gate)** — blocked *or* escalated to a human.
 - **precision** — benign actions NOT blocked (100% = zero false positives). **under-gate** — risky actions silently allowed.

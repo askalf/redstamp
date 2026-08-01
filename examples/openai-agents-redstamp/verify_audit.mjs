@@ -4,7 +4,7 @@
 //   node verify_audit.mjs <path-to-audit.jsonl>
 //
 // Resolves warden's audit module relative to this example's location in the
-// warden repo (examples/openai-agents-warden/ -> ../../src/audit.mjs).
+// warden repo (examples/openai-agents-redstamp/ -> ../../src/audit.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

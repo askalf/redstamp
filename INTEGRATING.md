@@ -1,6 +1,6 @@
 # Integrating redstamp into a fleet
 
-Three surfaces, depending on how an agent runs. Until `@askalf/redstamp` is published, depend on it with a path: `"@askalf/redstamp": "file:../redstamp"` (swap to a version on publish).
+Three surfaces, depending on how an agent runs. redstamp is **not distributed on npm** (the registry name is a deprecated pointer stub — see the README), so depend on the signed release tarball: `"@askalf/redstamp": "https://github.com/askalf/redstamp/releases/latest/download/redstamp.tgz"`, or on a local path (`file:../redstamp`) inside a monorepo.
 
 ## 1. Claude Code (operator sessions, hands in Claude-Login mode, dock) — DONE
 Register the PreToolUse hook in `~/.claude/settings.json` (a new group beside any existing hooks):

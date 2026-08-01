@@ -19,7 +19,7 @@ const auditPath = process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.
 const judge = process.env.WARDEN_JUDGE_ENDPOINT
   ? makeJudge({
       endpoint: process.env.WARDEN_JUDGE_ENDPOINT,
-      model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
+      model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-5',
       apiKey: process.env.WARDEN_JUDGE_KEY || process.env.ANTHROPIC_API_KEY,
     })
   : null;

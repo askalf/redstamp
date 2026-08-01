@@ -1,5 +1,5 @@
 {
-  "name": "openai-agents-warden-example",
+  "name": "openai-agents-redstamp-example",
   "private": true,
   "type": "module",
   "description": "Govern an OpenAI Agents SDK agent's MCP tool calls with warden",

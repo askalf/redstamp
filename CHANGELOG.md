@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- **npm is a pointer, permanently.** `@askalf/redstamp` on the registry is now a
+  deprecated stub (`npm-stub/`, v0.0.3) that throws on import and points at the
+  signed GitHub release. npm's automated content scan rejects the real tarball —
+  its detection-signature corpus reads as malware — and an allowlist review was
+  declined. The signatures will not be obfuscated or split to pass a scanner.
+- **Arena + bench figures refreshed** against the current 291-sample / 25-family
+  corpus (was 245 / 19): deterministic recall 96.5% -> **100%**, precision 100%.
+  The published arena table had been scored on a corpus no longer in the tree.
+
 ## [0.7.3] - 2026-08-01
 
 ### Fixed — classifier precision, measured against the marketplace corpus (#107–#111)

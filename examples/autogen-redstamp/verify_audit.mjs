@@ -1,10 +1,10 @@
-// Verify warden's audit chain over the governed LangGraph run, then prove it is
+// Verify warden's audit chain over the governed agent run, then prove it is
 // tamper-EVIDENT: flip one byte in a verdict and the chain fails to verify.
 //
 //   node verify_audit.mjs <path-to-audit.jsonl>
 //
 // Resolves warden's audit module relative to this example's location in the
-// warden repo (examples/langgraph-warden/ -> ../../src/audit.mjs).
+// warden repo (examples/autogen-redstamp/ -> ../../src/audit.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
