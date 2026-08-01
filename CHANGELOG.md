@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-01
+
+### Fixed — classifier precision, measured against the marketplace corpus (#107–#111)
+Four classifier fixes plus a bench refresh. Precision work dominates, but #110
+also closes a genuine detection gap — see below. Bench recall is unchanged at
+**165/165**.
+
+- **Exfiltration intent no longer fires in reverse** (#107). The rule matched
+  verb→object in either direction, but object-before-verb is *statement*-shaped:
+  "secrets may leak into logs" warns about a risk, it doesn't instruct. Across
+  1,885 marketplace skills the flag fired 26 times with **zero true positives**;
+  the reverse branch accounted for 14 of them. Not cosmetic — the flag is
+  advisory alone, but any co-occurring flag lifts a finding to critical, which is
+  how `newrelic:kubernetes` went out as an exfiltration verdict (#75/#77).
+- **A browser credential store needs a browser profile, not any `/cookies`**
+  (#109). `/` is also how English writes a word list, so "extra
+  headers/cookies/query strings" and a docs URL ending `/functions/cookies`
+  matched. **10 live marketplace skills** carried it.
+- **A dotted filename no longer severs the path→destination clause** (#110).
+  Two linked defects: `CLAUSE_GAP` ended a clause at *any* `.`, so a dotted token
+  cut the clause before its destination half — **a false negative, a real
+  detection gap** — plus the false positive that fixing it exposed.
+- **`.claude` is a config directory, not a credential path** (#111).
+  `(?:\/)\.claude(?:\/)` matched anything under the agent's config home, flagging
+  **31 live marketplace skills** for ordinary install and config paths
+  (`~/.claude/settings.json`, `~/.claude/skills/`, `mcp.json`). Not one of the 31
+  referenced a credential.
+- **Bench edgecase expectations refreshed** (#108), stale since red-team wave 4:
+  three evasions closed by #105 were still asserted as slipping, so every run
+  reported "3 surprise(s)" — which is how a bench stops being read. Now 97 edge
+  cases, 0 surprises, with the honest judge-tier residue split out rather than
+  lumped in with fixed cases.
+
+No API, policy-schema, or audit-format changes — a drop-in upgrade from 0.7.2.
+
+### Why this release exists
+`truecopy` pins redstamp by commit SHA precisely because these fixes landed
+after 0.7.2 and had no release to point at. npm v12 blocks git dependencies by
+default, so that SHA pin breaks every truecopy install route once runners move
+to npm 12. Cutting a release containing them lets truecopy pin a signed release
+tarball instead. See askalf/truecopy#134.
+
 ## [0.7.2] - 2026-07-27
 
 ### Security — six judge-tier fail-opens closed (red-team wave 4, #105)
