@@ -20,13 +20,13 @@ tables are CI-generated, all rows scored on the same neutral host).
 
 | firewall | recall (block) | recall (+gate) | precision | under-gate | deterministic |
 |---|---|---|---|---|---|
-| **warden** (default, offline) | **96.5%** | **96.5%** | **100%** | 1/35 | yes |
-| regex deny-list (naive baseline) | 15.4% | 15.4% | 98.5% | 35/35 | yes |
-| **Pipelock** v3.0.0 (scan API, out-of-box) | 7.0% | 7.0% | 95.5% | 29/35 | yes |
-| **AEGIS** v0.2.0 (pre-execution `/check`, blocking) | 4.9% | **59.4%** | **100%** | 20/35 | yes |
-| **mcp-firewall** v0.1.0 (inbound pipeline, starter) | 9.8% | **100%** | 95.5% | 0/35 | yes |
-| allow-all (null) | 0% | 0% | 100% | 35/35 | yes |
-| block-all (paranoid) | 100% | 100% | 0% | 0/35 | yes |
+| **warden** (default, offline) | **100.0%** | **100.0%** | **100%** | 1/44 | yes |
+| regex deny-list (naive baseline) | 17.6% | 17.6% | 96.3% | 44/44 | yes |
+| **Pipelock** v3.0.0 (scan API, out-of-box) | 6.1% | 6.1% | 96.3% | 38/44 | yes |
+| **AEGIS** v0.2.0 (pre-execution `/check`, blocking) | 4.2% | **53.9%** | **100%** | 29/44 | yes |
+| **mcp-firewall** v0.1.0 (inbound pipeline, starter) | 8.5% | **100%** | 96.3% | 0/44 | yes |
+| allow-all (null) | 0% | 0% | 100% | 44/44 | yes |
+| block-all (paranoid) | 100% | 100% | 0% | 0/44 | yes |
 
 The two anchors are the point: **block-all** gets perfect recall by blocking all
 your real work; **allow-all** gets perfect precision by catching nothing. A
@@ -61,7 +61,7 @@ head-to-head loss:
 
 ## What's measured, and why each matters
 
-The corpus (`corpus.json`, 245 samples, 19 attack families) labels every sample
+The corpus (`corpus.json`, 291 samples, 25 attack families) labels every sample
 by what a correct firewall **should** do — `block` (malicious), `approve`
 (risky / dual-use, escalate to a human), or `allow` (benign). Then, per tool:
 

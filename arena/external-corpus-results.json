@@ -67,8 +67,8 @@
       "underGate": 1,
       "underGateRate": 0.125,
       "errored": 0,
-      "latencyMedianMs": 0.055,
-      "latencyP99Ms": 14.292,
+      "latencyMedianMs": 0.071,
+      "latencyP99Ms": 19.81,
       "perFamilyBlockRecall": {
         "T1003.001": 1,
         "T1003.002": 1,
@@ -123,7 +123,7 @@
       "underGateRate": 1,
       "errored": 0,
       "latencyMedianMs": 0.002,
-      "latencyP99Ms": 0.36,
+      "latencyP99Ms": 0.387,
       "perFamilyBlockRecall": {
         "T1003.001": 0,
         "T1003.002": 0,
@@ -306,7 +306,7 @@
       "underGateRate": 0.625,
       "errored": 0,
       "latencyMedianMs": 0,
-      "latencyP99Ms": 3,
+      "latencyP99Ms": 4,
       "perFamilyBlockRecall": {
         "T1003.001": 0,
         "T1003.002": 0,
@@ -363,7 +363,7 @@
       "underGateRate": 0.625,
       "errored": 0,
       "latencyMedianMs": 1,
-      "latencyP99Ms": 1,
+      "latencyP99Ms": 4,
       "perFamilyBlockRecall": {
         "T1003.001": 0,
         "T1003.002": 0,
@@ -419,7 +419,7 @@
       "underGate": 0,
       "underGateRate": 0,
       "errored": 0,
-      "latencyMedianMs": 0.0325,
+      "latencyMedianMs": 0.0335,
       "latencyP99Ms": 1.251,
       "perFamilyBlockRecall": {
         "T1003.001": 1,

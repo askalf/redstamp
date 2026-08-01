@@ -1,5 +1,5 @@
 {
-  "name": "langgraph-warden-example",
+  "name": "langgraph-redstamp-example",
   "private": true,
   "type": "module",
   "description": "Govern a LangGraph.js StateGraph's MCP tool calls with warden",

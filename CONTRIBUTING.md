@@ -57,6 +57,8 @@ crash or a new high-severity finding will block the change.
 ## Releases
 
 Releases are automated: bump `version` in `package.json` on `master` and
-`auto-release.yml` tags it, cuts a GitHub release from `CHANGELOG.md`, and
-publishes to npm via OIDC trusted publishing (no tokens). A normal PR needs no
-release steps.
+`auto-release.yml` tags it and cuts a GitHub release from `CHANGELOG.md`,
+attaching a Sigstore-signed tarball. That tarball **is** the distribution —
+redstamp is not published to npm (the registry name holds a deprecated pointer
+stub; npm's content scan rejects the real package and an allowlist review was
+declined). A normal PR needs no release steps.
