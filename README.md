@@ -40,7 +40,7 @@ Install from the Sigstore-signed GitHub release instead — verify provenance fi
 
 ```sh
 gh release download --repo askalf/redstamp --pattern 'redstamp.tgz*'
-gh attestation verify redstamp.tgz --owner askalf   # exits non-zero if it isn't ours
+gh attestation verify redstamp.tgz --repo askalf/redstamp --bundle redstamp.tgz.sigstore.json   # non-zero unless this exact repo built it
 npm i -g ./redstamp.tgz
 ```
 
