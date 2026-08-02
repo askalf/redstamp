@@ -22,7 +22,7 @@ Releases are **Sigstore-signed tarballs** published on GitHub:
 gh release download --repo askalf/redstamp --pattern 'redstamp.tgz*'
 
 # verify provenance BEFORE installing — exits non-zero if it isn't ours
-gh attestation verify redstamp.tgz --owner askalf
+gh attestation verify redstamp.tgz --repo askalf/redstamp --bundle redstamp.tgz.sigstore.json
 
 npm i -g ./redstamp.tgz
 ```
