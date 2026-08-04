@@ -145,11 +145,11 @@ export const BLACK_SHELL = [
   { re: /\b(?:scp|rsync)\b[^|@]*?(?:id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem\b|\.ppk\b|\.aws[\\/]credentials|\.env\b|[\\/]\.ssh\b|[\\/]\.gnupg\b)\S*\s+\S*@\S+:/i, why: 'exfiltrate a key/credential via scp/rsync' },
   { re: /\bcurl\b[^|]*\s-(?:F|T|d|-form|-upload-file|-data(?:-binary)?)\b[^|]*(?:@?\/etc\/(?:passwd|shadow)|id_rsa|id_ed25519|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|\.pem\b)/i, why: 'uploads a sensitive file via curl (exfil)' },
   { re: /\bwget\b[^|]*--post-file=[^|]*(?:\/etc\/(?:passwd|shadow)|id_rsa|[\\/]\.ssh[\\/]|\.aws[\\/]credentials|\.env\b|credentials)/i, why: 'uploads a sensitive file via wget (exfil)' },
-  { re: new RegExp(String.raw`\breg(?:['"]\s*,\s*['"]|\s)+add\b[^|]*(?:CurrentVersion[\\/]+Run|Image\s+File\s+Execution)`, 'i'), why: 'registry Run-key persistence' },
-  { re: new RegExp(String.raw`\bpowershell(?:\.exe)?\b[^|]*['",\s]-e(?:c|nc|ncodedcommand)?\b(?:['"]?\s*,\s*['"]?|\s)+[A-Za-z0-9+/=]{16,}`, 'i'), why: 'powershell encoded command (obfuscation)' },
+  { re: new RegExp(String.raw`\breg${ARGSEP}add\b[^|]*(?:CurrentVersion[\\/]+Run|Image\s+File\s+Execution)`, 'i'), why: 'registry Run-key persistence' },
+  { re: new RegExp(String.raw`\bpowershell(?:\.exe)?\b[^|]*['",\s]-e(?:c|nc|ncodedcommand)?\b${FLAGSEP}[A-Za-z0-9+/=]{16,}`, 'i'), why: 'powershell encoded command (obfuscation)' },
   { re: /\b(?:IEX|Invoke-Expression|iwr|irm)\b[^|]*(?:DownloadString|DownloadFile|Net\.WebClient|Invoke-WebRequest|https?:)/i, why: 'powershell download-cradle (RCE)' },
   { re: /\bvssadmin\b[^|]*\bdelete\b[^|]*shadow/i, why: 'deletes volume shadow copies (ransomware)' },
-  { re: new RegExp(String.raw`\bnet(?:['"]\s*,\s*['"]|\s)+localgroup(?:['"]\s*,\s*['"]|\s)+admin\w*\b[^|]*/add`, 'i'), why: 'adds a backdoor admin account' },
+  { re: new RegExp(String.raw`\bnet${ARGSEP}localgroup${ARGSEP}admin\w*\b[^|]*/add`, 'i'), why: 'adds a backdoor admin account' },
   { re: /\bdocker\s+run\b[^|]*-v\s+\/:(?:\/|\s|$)/i, why: 'mounts host root into container (escape)' },
   { re: /\bnsenter\b[^|]*(?:--target|-t)\s*1\b/i, why: 'namespace escape to host (nsenter)' },
   { re: /\b(?:env|printenv|set)\b\s*\|\s*(?:curl|wget|nc|ncat)\b/i, why: 'pipes environment to the network (exfil)' },
@@ -171,7 +171,7 @@ export const BLACK_SHELL = [
   { re: /\bregsvr32(?:\.exe)?\b[^|]*(?:\/i:\s*https?:|scrobj\.dll)/i, why: 'regsvr32 scriptlet exec (LOLBin)' },
   { re: /\bmsiexec(?:\.exe)?\b[^|]*\/i\b[^|]*https?:/i, why: 'msiexec remote package (LOLBin)' },
   { re: /\brundll32(?:\.exe)?\b[^|]*javascript:/i, why: 'rundll32 javascript: protocol exec (LOLBin)' },
-  { re: new RegExp(String.raw`\bwmic\b[^|]*\bprocess\b[^|]*\bcall(?:['"]\s*,\s*['"]|\s)+create\b`, 'i'), why: 'WMI process creation (exec)' },
+  { re: new RegExp(String.raw`\bwmic\b[^|]*\bprocess\b[^|]*\bcall${ARGSEP}create\b`, 'i'), why: 'WMI process creation (exec)' },
   // --- download-and-execute (Unix). Process substitution / sh -c that a shell
   //     actually executes; `diff <(curl a) <(curl b)` (no sh/source) won't match. ---
   { re: /(?:\b(?:ba)?sh\b|\bsource\b|(?:^|[;&|])\s*\.)\s*[^|]*<\(\s*(?:curl|wget)\b/i, why: 'process-substitution remote exec (RCE)' },
@@ -204,7 +204,7 @@ export const BLACK_SHELL = [
   { re: /\bsocat\b[^|]*\bEXEC:/i, why: 'socat reverse shell (EXEC)' },
   { re: /\bmkfifo\b[\s\S]*\|\s*n(?:c|cat)\b/i, why: 'named-pipe reverse shell (mkfifo|nc)' },
   // --- credential dumping (Windows) ---
-  { re: new RegExp(String.raw`\breg(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+save\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)\\(?:SAM|SECURITY|SYSTEM)\b`, 'i'), why: 'dumps SAM/SECURITY hive (credential theft)' },
+  { re: new RegExp(String.raw`\breg(?:\.exe)?${ARGSEP}save\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)\\(?:SAM|SECURITY|SYSTEM)\b`, 'i'), why: 'dumps SAM/SECURITY hive (credential theft)' },
   { re: /\bcomsvcs\.dll\b.{0,40}\bMiniDump\b|\bprocdump(?:64|\.exe)?\b[^|]*\blsass\b|\bMiniDumpWriteDump\b/i, why: 'LSASS memory dump (credential theft)' },
   // --- Windows persistence (autorun). The shell-side of the Startup/Run gap;
   //     read-only forms (reg query Run, schtasks /query, Get-ScheduledTask,
@@ -216,25 +216,25 @@ export const BLACK_SHELL = [
   // a scheduled task by another name — Register-ScheduledJob registers a PowerShell
   // job under Task Scheduler (Microsoft\Windows\PowerShell\ScheduledJobs).
   { re: /\bRegister-ScheduledJob\b/i, why: 'registers a scheduled job (persistence)' },
-  { re: new RegExp(String.raw`\bsc(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+create\b|\bNew-Service\b`, 'i'), why: 'creates a service (persistence)' },
+  { re: new RegExp(String.raw`\bsc(?:\.exe)?${ARGSEP}create\b|\bNew-Service\b`, 'i'), why: 'creates a service (persistence)' },
   // direct registry service install — evades `sc create` / `New-Service`.
-  { re: new RegExp(String.raw`\breg(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+add\b[^|]*\b(?:CurrentControlSet|ControlSet\d+)[\\/]+Services\b`, 'i'), why: 'registry service install (persistence)' },
+  { re: new RegExp(String.raw`\breg(?:\.exe)?${ARGSEP}add\b[^|]*\b(?:CurrentControlSet|ControlSet\d+)[\\/]+Services\b`, 'i'), why: 'registry service install (persistence)' },
   // WMI permanent event subscription — fileless persistence: a filter + a
   // CommandLine/ActiveScript consumer wired by a FilterToConsumerBinding. Scoped to
   // instance-CREATING cmdlets (Set/New-*Instance), so reads/temporary events stay clean.
   { re: /\b(?:Set-WmiInstance|New-CimInstance|Set-CimInstance)\b[^|]*\b(?:__EventFilter|CommandLineEventConsumer|ActiveScriptEventConsumer|__FilterToConsumerBinding)\b|\bwmic\b[^|]*\bsubscription\b[^|]*\bcreate\b/i, why: 'WMI event-subscription persistence' },
   // Winlogon Userinit/Shell hijack — runs an attacker binary at every logon.
-  { re: new RegExp(String.raw`\b(?:reg(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+add|New-ItemProperty|Set-ItemProperty)\b[^|]*\bWinlogon\b[^|]*\b(?:Userinit|Shell)\b`, 'i'), why: 'Winlogon Userinit/Shell hijack (persistence)' },
+  { re: new RegExp(String.raw`\b(?:reg(?:\.exe)?${ARGSEP}add|New-ItemProperty|Set-ItemProperty)\b[^|]*\bWinlogon\b[^|]*\b(?:Userinit|Shell)\b`, 'i'), why: 'Winlogon Userinit/Shell hijack (persistence)' },
   // RunOnce / RunServices / Policies-Explorer-Run autostart keys — the Run-key
   // rule above stops at `Run\b`, so these siblings need their own write-verb match.
-  { re: new RegExp(String.raw`(?:New-ItemProperty|Set-ItemProperty|reg(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+add)\b[^|]*(?:CurrentVersion[\\/]+(?:RunOnce|RunServices(?:Once)?)|Policies[\\/]+Explorer[\\/]+Run)\b`, 'i'), why: 'RunOnce/RunServices/Policies autostart persistence' },
+  { re: new RegExp(String.raw`(?:New-ItemProperty|Set-ItemProperty|reg(?:\.exe)?${ARGSEP}add)\b[^|]*(?:CurrentVersion[\\/]+(?:RunOnce|RunServices(?:Once)?)|Policies[\\/]+Explorer[\\/]+Run)\b`, 'i'), why: 'RunOnce/RunServices/Policies autostart persistence' },
   // --- security disable (more) ---
-  { re: new RegExp(String.raw`\bsc(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+(?:stop|delete|config)(?:['"]\s*,\s*['"]|\s)+(?:WinDefend|Sense|MsMpSvc|WdNisSvc)\b`, 'i'), why: 'stops Microsoft Defender service' },
-  { re: new RegExp(String.raw`\bwevtutil(?:['"]\s*,\s*['"]|\s)+(?:cl|clear-log)\b|\bClear-EventLog\b|\bRemove-EventLog\b`, 'i'), why: 'clears Windows event logs (anti-forensics)' },
+  { re: new RegExp(String.raw`\bsc(?:\.exe)?${ARGSEP}(?:stop|delete|config)${ARGSEP}(?:WinDefend|Sense|MsMpSvc|WdNisSvc)\b`, 'i'), why: 'stops Microsoft Defender service' },
+  { re: new RegExp(String.raw`\bwevtutil${ARGSEP}(?:cl|clear-log)\b|\bClear-EventLog\b|\bRemove-EventLog\b`, 'i'), why: 'clears Windows event logs (anti-forensics)' },
   { re: /\bauditctl\s+-D\b|\bsystemctl\s+(?:stop|disable|mask)\s+(?:auditd|rsyslog|syslog)\b/i, why: 'disables host audit/logging' },
-  { re: new RegExp(String.raw`\bbcdedit\b[^|]*(?:recoveryenabled(?:['"]\s*,\s*['"]|\s)+no|bootstatuspolicy(?:['"]\s*,\s*['"]|\s)+ignoreallfailures)`, 'i'), why: 'disables Windows recovery (ransomware)' },
+  { re: new RegExp(String.raw`\bbcdedit\b[^|]*(?:recoveryenabled${ARGSEP}no|bootstatuspolicy${ARGSEP}ignoreallfailures)`, 'i'), why: 'disables Windows recovery (ransomware)' },
   // --- obfuscated/hidden powershell (hidden window + bypass/encoded together) ---
-  { re: new RegExp(String.raw`\bpowershell(?:\.exe)?\b(?=[^|]*-w(?:indowstyle)?(?:['"]?\s*,\s*['"]?|\s)+hidden\b)(?=[^|]*(?:-(?:ep|executionpolicy)(?:['"]?\s*,\s*['"]?|\s)+bypass\b|-e(?:c|nc|ncodedcommand)?['",\s]))`, 'i'), why: 'hidden + bypass/encoded powershell (obfuscation)' },
+  { re: new RegExp(String.raw`\bpowershell(?:\.exe)?\b(?=[^|]*-w(?:indowstyle)?${FLAGSEP}hidden\b)(?=[^|]*(?:-(?:ep|executionpolicy)${FLAGSEP}bypass\b|-e(?:c|nc|ncodedcommand)?['",\s]))`, 'i'), why: 'hidden + bypass/encoded powershell (obfuscation)' },
   // --- container escape (more) ---
   { re: /\bdocker\s+run\b[^|]*-v\s+\/var\/run\/docker\.sock/i, why: 'mounts the docker socket (escape)' },
   { re: /\bdocker\s+run\b(?=[^|]*--pid[= ]host\b)(?=[^|]*--privileged\b)/i, why: 'privileged host-pid container (escape)' },
@@ -323,7 +323,7 @@ BLACK_SHELL.push(
   // Get-ChildItem/dir -Recurse of a system root piped into a force-delete.
   { re: new RegExp(String.raw`\b(?:Get-ChildItem|gci|dir|ls)\b(?=[^|\n]*${DELIM}${WIN_RECURSE})(?=[^|\n]*${WIN_ROOT})[^\n]*\|\s*(?:Remove-Item|ri|rm|rmdir|rd|del)\b[^\n]*${DELIM}${WIN_FORCE}`, 'i'), why: 'recursive enumerate of a system root piped to a force-delete' },
   // reg delete of a critical machine hive (SYSTEM/SOFTWARE/SAM/SECURITY).
-  { re: new RegExp(String.raw`\breg(?:\.exe)?(?:['"]\s*,\s*['"]|\s)+delete\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)[\\/]+(?:SYSTEM|SOFTWARE|SAM|SECURITY)\b`, 'i'), why: 'deletes a critical registry hive' },
+  { re: new RegExp(String.raw`\breg(?:\.exe)?${ARGSEP}delete\b[^|]*\bHK(?:LM|EY_LOCAL_MACHINE)[\\/]+(?:SYSTEM|SOFTWARE|SAM|SECURITY)\b`, 'i'), why: 'deletes a critical registry hive' },
 );
 RED_SHELL.push(
   // Forced shutdown/reboot — disruptive and outward-visible, but recoverable → gate, not block.
