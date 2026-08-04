@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-04
+
+### Fixed — the PowerShell `-ArgumentList` array form evaded the black gate (#124)
+
+`Start-Process powershell -ArgumentList '-ExecutionPolicy','Bypass','-WindowStyle','Hidden',...`
+rated **green** while the semantically identical space-separated spelling rated
+**black**. Both obfuscation lookaheads required whitespace between a flag and
+its value (`\s+`), but PowerShell's idiomatic array form separates them with a
+quote-comma-quote. This is the deterministic hard-deny gate, not an advisory
+flag, and it is load-bearing: `@askalf/agent`'s shell-mode dispatch is firewalled
+through the warden hook, so a miss here is unfirewalled execution on the host.
+Proven live on a fleet device — the comma-array form completed, the
+space-separated form was blocked, same box, same PID, 7 minutes apart.
+
+- **Two separator classes, split by left context** — not one widened class. The
+  obvious fix (`\s+` -> `['",\s]+` everywhere) creates a false-positive class: a
+  bare comma-space then bridges two ordinary prose words, so English like
+  "net, localgroup and add are keywords" newly rates black. Instead `FLAGSEP`
+  follows a dash-flag, where a bare comma is safe because prose never writes
+  `-windowstyle,hidden`; `ARGSEP` sits between two bare words, where the comma
+  must be quoted on *both* sides to count.
+- Short-flag array spellings (`'-ep','bypass','-w','hidden','-enc'`) are covered
+  by the same arms. Pinned by `test/argument-list-separator.test.mjs`.
+
+### Fixed — `-f` matched the CLI flag, not just the format operator (#125, #123)
+
+`$t = "build -f Dockerfile -t app ."; & $docker $t` smelled of obfuscation and
+paid a needless judge call. `OBFUSCATION_RE`'s `-f\b` arm keys on a `{N}`
+placeholder now, which is not a heuristic: the format operator cannot assemble
+without one (`"a" -f $x` evaluates to `"a"`), so a placeholder appears in every
+real evasion and in no flag usage. Verdict-neutral — the smell routes to the
+judge and never blocks — so this cuts wasted judge volume, not coverage.
+`#123` routes genuine PowerShell string-assembly obfuscation to the judge.
+
+Corpus unchanged at 298 samples: deterministic recall **100%**, precision
+**100%**. 310 tests pass; ReDoS bench worst case 0.89ms against a 25ms threshold.
+
+### Note on distribution
+
+npm remains a **pointer stub** (`@askalf/redstamp` 0.0.3) and `NPM_PUBLISH_ENABLED`
+stays off — see 0.7.4. This release ships as the git tag plus the signed GitHub
+release with Sigstore provenance, which is the only distribution channel. There
+is no npm 0.7.x line and this release does not create one.
+
 ## [0.7.4] - 2026-08-02
 
 ### Fixed — writing *about* a dangerous command is not running it (#119)
