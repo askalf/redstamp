@@ -320,7 +320,14 @@ export const OBFUSCATION_RE = [
   // assembles the cmdlet name from pieces and invokes it indirectly. Flag the
   // COMBINATION (string-assembly that feeds an invocation), never a bare
   // `& $var` — the PowerShell call operator alone is idiomatic and benign.
-  { re: /\$\w+\s*=\s*[^;]*(?:-join\b|-f\b|["']\s*\+\s*["'])[^;]*;[^;]{0,60}&\s*\$/i, why: 'assembles a string then invokes it (PowerShell call operator)' },
+  //
+  // The `-f` arm is keyed on a `{N}` PLACEHOLDER, not on `-f` alone. PowerShell's
+  // format operator is useless for assembly without one (`"a" -f $x` is just
+  // `"a"`), while a bare `-f\b` also matches the ordinary CLI flag — so
+  // `$t = "build -f Dockerfile -t app ."; & $docker $t` smelled of obfuscation
+  // and paid for a judge call. Requiring the placeholder keeps the real shape
+  // (`"{0}{1}" -f "Rem","ove-Item"`, spaced or not) and drops the flag.
+  { re: /\$\w+\s*=\s*[^;]*(?:-join\b|\{\d{1,2}\}[^;]{0,80}?-f\b|["']\s*\+\s*["'])[^;]*;[^;]{0,60}&\s*\$/i, why: 'assembles a string then invokes it (PowerShell call operator)' },
   { re: /&\s*\(\s*[^)]*(?:-join\b|["']\s*\+\s*["'])/i, why: 'invokes an assembled string expression (PowerShell call operator)' },
   { re: /\b(?:iex|invoke-expression)\b/i, why: 'Invoke-Expression of dynamic content (PowerShell eval)' },
 ];
