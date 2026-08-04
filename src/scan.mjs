@@ -315,6 +315,14 @@ export const OBFUSCATION_RE = [
   { re: /(?:\\x[0-9a-f]{2}){2,}/i, why: 'hex-escaped payload' },
   { re: /\bprintf\b[^|;&\n]*(?:\\x[0-9a-f]{2}|\\[0-7]{3})/i, why: 'printf hex/octal building a command' },
   { re: /\w(?:""|'')\w/, why: 'quote-split word (anti-detection)' },
+  // PowerShell evasion shapes — the deterministic gate reads a literal like
+  // `Remove-Item -Recurse -Force C:\Windows` and blacks it, so an attacker
+  // assembles the cmdlet name from pieces and invokes it indirectly. Flag the
+  // COMBINATION (string-assembly that feeds an invocation), never a bare
+  // `& $var` — the PowerShell call operator alone is idiomatic and benign.
+  { re: /\$\w+\s*=\s*[^;]*(?:-join\b|-f\b|["']\s*\+\s*["'])[^;]*;[^;]{0,60}&\s*\$/i, why: 'assembles a string then invokes it (PowerShell call operator)' },
+  { re: /&\s*\(\s*[^)]*(?:-join\b|["']\s*\+\s*["'])/i, why: 'invokes an assembled string expression (PowerShell call operator)' },
+  { re: /\b(?:iex|invoke-expression)\b/i, why: 'Invoke-Expression of dynamic content (PowerShell eval)' },
 ];
 
 export function obfuscationHits(text = '') {
