@@ -8,6 +8,9 @@
 [![ci](https://github.com/askalf/redstamp/actions/workflows/ci.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/askalf/redstamp/actions/workflows/codeql.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askalf/redstamp/badge)](https://scorecard.dev/viewer/?uri=github.com/askalf/redstamp)
+<!-- redstamp on Glama — uncomment once the server is indexed in the directory (submit at https://glama.ai/mcp/servers; glama.json is already in place):
+[![redstamp on Glama](https://glama.ai/mcp/servers/askalf/redstamp/badges/card.svg)](https://glama.ai/mcp/servers/askalf/redstamp)
+-->
 <!-- OpenSSF Best Practices — uncomment once enrolled at https://www.bestpractices.dev and replace PROJECT_ID:
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
 -->
