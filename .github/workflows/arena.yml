@@ -166,16 +166,23 @@ jobs:
           bash arena/ci/aegis-reset.sh
           node arena/run.mjs --corpus thirdparty-atomic.json
 
-      # 1,212 samples x 2 scoring passes exceeds AEGIS's free-plan allowance
-      # even from a clean start, so it cannot be scored here without buying a
-      # paid plan — which we decline to do to benchmark someone else's tool.
-      # Its absence from this corpus is expected and excluded from the
-      # assertion below; every other competitor is still required to score.
+      # 1,212 samples exceeds AEGIS's free-plan allowance (1,000 checks) in a
+      # SINGLE pass, before the determinism check even runs a second one — so
+      # a fresh quota buys a partial, not a real, measurement: whichever
+      # samples land after exhaustion come back as adapter errors, and the
+      # scorer counts an errored sample as "not blocked" (correctly — an error
+      # is not a false positive), which would publish a precision number that
+      # is actually "precision, computed over however much of the corpus we
+      # got through before the paywall cut in" without saying so. We decline
+      # to buy a paid plan to benchmark someone else's tool, so rather than
+      # publish a quota-corrupted row (which is also why the determinism
+      # column would flag it — two runs exhaust on different sample
+      # boundaries), we exclude AEGIS from this one corpus explicitly. Every
+      # other adapter still runs; the assertion below matches this list.
       - name: Run arena (third-party tldr-pages benign corpus)
         run: |
           set -euo pipefail
-          bash arena/ci/aegis-reset.sh
-          node arena/run.mjs --corpus thirdparty-tldr.json
+          node arena/run.mjs --corpus thirdparty-tldr.json --adapter warden,deny-list,allow-all,block-all,llm-guard,pipelock,mcp-firewall,llamafirewall
 
       - name: Score redstamp on the third-party corpora (axis-aware)
         run: node arena/thirdparty.mjs
