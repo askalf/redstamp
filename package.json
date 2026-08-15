@@ -38,7 +38,11 @@
     "fuzz": "node fuzz/run.mjs",
     "arena": "node arena/run.mjs",
     "arena:corpus": "node arena/build-corpus.mjs",
-    "arena:external": "node arena/run.mjs --corpus external-corpus.json"
+    "arena:external": "node arena/run.mjs --corpus external-corpus.json",
+    "arena:frameworks": "node arena/frameworks.mjs",
+    "arena:thirdparty": "node arena/thirdparty.mjs",
+    "arena:build-tldr": "node arena/build-thirdparty-tldr.mjs",
+    "arena:build-atomic": "node arena/build-thirdparty-atomic.mjs"
   },
   "keywords": [
     "agent",

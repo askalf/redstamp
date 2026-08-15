@@ -1,0 +1,1076 @@
+{
+  "generatedFrom": "arena/corpus.json",
+  "corpusTotal": 298,
+  "headline": {
+    "owaspLlm": {
+      "covered": 4,
+      "partial": 3,
+      "total": 10
+    },
+    "owaspAgentic": {
+      "covered": 4,
+      "partial": 4,
+      "total": 15
+    },
+    "measured": {
+      "malBlocked": 168,
+      "malTotal": 168,
+      "recall": 1,
+      "riskEscalated": 43,
+      "riskTotal": 44,
+      "precision": 1,
+      "benignFp": 0,
+      "benignTotal": 86
+    }
+  },
+  "owaspLlm": [
+    {
+      "id": "LLM01",
+      "name": "Prompt Injection",
+      "verdict": "covered",
+      "reason": "Screens prompt-injection text in untrusted skill/tool descriptions and tool results; neutralises injected instructions before they reach the agent.",
+      "families": [
+        "obfuscation",
+        "injection-skill"
+      ],
+      "measured": {
+        "tot": 10,
+        "prevented": 10,
+        "pct": 1
+      }
+    },
+    {
+      "id": "LLM02",
+      "name": "Sensitive Information Disclosure",
+      "verdict": "covered",
+      "reason": "Blocks credential/secret egress and cloud-metadata SSRF; flags secret reads.",
+      "families": [
+        "exfil",
+        "exfil-bulk",
+        "secret-theft",
+        "ssrf-metadata"
+      ],
+      "measured": {
+        "tot": 40,
+        "prevented": 40,
+        "pct": 1
+      }
+    },
+    {
+      "id": "LLM03",
+      "name": "Supply Chain",
+      "verdict": "partial",
+      "reason": "Catches supply-chain-shaped RCE (git ext::/hooks) and poisoned-skill text; full dependency/provenance pinning is redstamp's sibling truecopy, not this classifier.",
+      "families": [
+        "git-rce"
+      ],
+      "measured": {
+        "tot": 4,
+        "prevented": 4,
+        "pct": 1
+      }
+    },
+    {
+      "id": "LLM04",
+      "name": "Data and Model Poisoning",
+      "verdict": "out",
+      "reason": "Training-data / model poisoning is out of scope for a runtime tool-call firewall (runtime instruction-poisoning is covered under LLM01).",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "LLM05",
+      "name": "Improper Output Handling",
+      "verdict": "covered",
+      "reason": "The LLM's output IS the tool call — redstamp validates and blocks the downstream action, and neutralises injected tool-result output.",
+      "families": [
+        "rce-download",
+        "rce-pipe",
+        "git-rce",
+        "parser-diff",
+        "injection-skill",
+        "type-confusion"
+      ],
+      "measured": {
+        "tot": 51,
+        "prevented": 51,
+        "pct": 1
+      }
+    },
+    {
+      "id": "LLM06",
+      "name": "Excessive Agency",
+      "verdict": "covered",
+      "reason": "Core thesis: constrains agent agency by blocking destructive, persistence, privilege, and defense-evasion actions and escalating dual-use ones.",
+      "families": [
+        "destructive-fs",
+        "rm-root",
+        "destructive-win",
+        "device-wipe",
+        "rce-download",
+        "rce-pipe",
+        "reverse-shell",
+        "obfuscation",
+        "ssrf-metadata",
+        "persistence-unix",
+        "persistence-win",
+        "security-disable",
+        "windows-ttp",
+        "container-escape",
+        "privesc",
+        "kernel-module",
+        "risky-infra"
+      ],
+      "measured": {
+        "tot": 160,
+        "prevented": 159,
+        "pct": 0.99375
+      }
+    },
+    {
+      "id": "LLM07",
+      "name": "System Prompt Leakage",
+      "verdict": "partial",
+      "reason": "Does not protect system-prompt text itself, but blocks egress of the secrets a leaked prompt would try to carry (via LLM02 families).",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "LLM08",
+      "name": "Vector and Embedding Weaknesses",
+      "verdict": "out",
+      "reason": "RAG / vector-store / embedding weaknesses are a different layer; redstamp does not inspect retrieval.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "LLM09",
+      "name": "Misinformation",
+      "verdict": "out",
+      "reason": "Misinformation / hallucination content is not a tool-call action; out of scope.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "LLM10",
+      "name": "Unbounded Consumption",
+      "verdict": "partial",
+      "reason": "Escalates some resource-heavy infra actions, but redstamp is not a rate/cost limiter — unbounded consumption is only partially addressed.",
+      "families": [
+        "risky-infra"
+      ],
+      "measured": {
+        "tot": 19,
+        "prevented": 18,
+        "pct": 0.9473684210526315
+      }
+    }
+  ],
+  "owaspAgentic": [
+    {
+      "id": "T1",
+      "name": "Memory Poisoning",
+      "verdict": "out",
+      "reason": "Agent memory stores are not inspected; runtime instruction poisoning is covered under T6/LLM01.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T2",
+      "name": "Tool Misuse",
+      "verdict": "covered",
+      "reason": "Tool misuse is the primary axis — every action is classified before execution.",
+      "families": [
+        "destructive-fs",
+        "rm-root",
+        "destructive-win",
+        "exfil",
+        "exfil-bulk",
+        "secret-theft",
+        "ssrf-metadata",
+        "persistence-unix",
+        "persistence-win",
+        "risky-infra"
+      ],
+      "measured": {
+        "tot": 114,
+        "prevented": 113,
+        "pct": 0.9912280701754386
+      }
+    },
+    {
+      "id": "T3",
+      "name": "Privilege Compromise",
+      "verdict": "covered",
+      "reason": "Blocks privilege escalation, container escape, kernel-module load, and defense disabling.",
+      "families": [
+        "secret-theft",
+        "ssrf-metadata",
+        "security-disable",
+        "container-escape",
+        "privesc",
+        "kernel-module"
+      ],
+      "measured": {
+        "tot": 43,
+        "prevented": 43,
+        "pct": 1
+      }
+    },
+    {
+      "id": "T4",
+      "name": "Resource Overload",
+      "verdict": "partial",
+      "reason": "Blocks destructive availability attacks; not a resource/rate limiter for compute overload.",
+      "families": [
+        "destructive-fs",
+        "rm-root",
+        "destructive-win",
+        "device-wipe",
+        "risky-infra"
+      ],
+      "measured": {
+        "tot": 52,
+        "prevented": 51,
+        "pct": 0.9807692307692307
+      }
+    },
+    {
+      "id": "T5",
+      "name": "Cascading Hallucination Attacks",
+      "verdict": "out",
+      "reason": "Cascading hallucination is a reasoning-chain failure, not a tool-call action.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T6",
+      "name": "Intent Breaking & Goal Manipulation",
+      "verdict": "partial",
+      "reason": "Indirect injection that redirects intent is screened at the injected-text and resulting-action level.",
+      "families": [
+        "injection-skill"
+      ],
+      "measured": {
+        "tot": 5,
+        "prevented": 5,
+        "pct": 1
+      }
+    },
+    {
+      "id": "T7",
+      "name": "Misaligned & Deceptive Behaviors",
+      "verdict": "out",
+      "reason": "Deceptive-behavior detection needs trajectory/goal modelling redstamp does not do.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T8",
+      "name": "Repudiation & Untraceability",
+      "verdict": "covered",
+      "reason": "Covered by the tamper-evident hash-chained audit log (verifyAuditFile / checkpoint), not the action classifier — every allowed/blocked verdict is recorded in an append-only, verifiable chain.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T9",
+      "name": "Identity Spoofing & Impersonation",
+      "verdict": "out",
+      "reason": "Agent identity/impersonation is an auth-layer concern, out of scope.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T10",
+      "name": "Overwhelming Human-in-the-Loop",
+      "verdict": "partial",
+      "reason": "Deterministic verdicts and an approve tier reduce human-review flooding, but the escalation-volume design is the operator's.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T11",
+      "name": "Unexpected RCE and Code Attacks",
+      "verdict": "covered",
+      "reason": "RCE via download cradles, pipe-to-interpreter, reverse shells, git-RCE, and obfuscated exec is core coverage.",
+      "families": [
+        "rce-download",
+        "rce-pipe",
+        "reverse-shell",
+        "git-rce",
+        "obfuscation",
+        "parser-diff",
+        "windows-ttp",
+        "type-confusion"
+      ],
+      "measured": {
+        "tot": 68,
+        "prevented": 68,
+        "pct": 1
+      }
+    },
+    {
+      "id": "T12",
+      "name": "Agent Communication Poisoning",
+      "verdict": "partial",
+      "reason": "The MCP proxy scans inter-tool results/skill text for poisoning (injection-skill family).",
+      "families": [
+        "injection-skill"
+      ],
+      "measured": {
+        "tot": 5,
+        "prevented": 5,
+        "pct": 1
+      }
+    },
+    {
+      "id": "T13",
+      "name": "Rogue Agents in Multi-Agent Systems",
+      "verdict": "out",
+      "reason": "Multi-agent rogue-agent detection is out of scope for a single action firewall.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T14",
+      "name": "Human Attacks on Multi-Agent Systems",
+      "verdict": "out",
+      "reason": "Multi-agent human-attack surface is out of scope.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    },
+    {
+      "id": "T15",
+      "name": "Human Manipulation",
+      "verdict": "out",
+      "reason": "Human manipulation is a social/UX concern, not a tool-call action.",
+      "families": [],
+      "measured": {
+        "tot": 0,
+        "prevented": 0,
+        "pct": null
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "family": "container-escape",
+      "desc": "Escape to host from a container",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T3"
+      ],
+      "attack": [
+        "T1611"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 4,
+        "approve": 2
+      },
+      "recall": 1,
+      "prevented": 6,
+      "tot": 6
+    },
+    {
+      "family": "destructive-fs",
+      "desc": "Recursive filesystem destruction (rm -rf /, wipe roots)",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T2",
+        "T4"
+      ],
+      "attack": [
+        "T1485",
+        "T1561"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 18,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 18,
+      "tot": 18
+    },
+    {
+      "family": "destructive-win",
+      "desc": "Windows destructive delete / registry nuke",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T2",
+        "T4"
+      ],
+      "attack": [
+        "T1485",
+        "T1070"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 7,
+        "approve": 2
+      },
+      "recall": 1,
+      "prevented": 9,
+      "tot": 9
+    },
+    {
+      "family": "device-wipe",
+      "desc": "Raw block-device / disk-structure wipe (dd, wipefs, blkdiscard)",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T4"
+      ],
+      "attack": [
+        "T1561"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 4,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 4,
+      "tot": 4
+    },
+    {
+      "family": "exfil",
+      "desc": "Credential/secret egress to an external host",
+      "llm": [
+        "LLM02"
+      ],
+      "agentic": [
+        "T2"
+      ],
+      "attack": [
+        "T1048",
+        "T1567"
+      ],
+      "atlas": [
+        "AML.T0057"
+      ],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 15,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 15,
+      "tot": 15
+    },
+    {
+      "family": "exfil-bulk",
+      "desc": "Bulk/staged data exfiltration (archive-and-ship)",
+      "llm": [
+        "LLM02"
+      ],
+      "agentic": [
+        "T2"
+      ],
+      "attack": [
+        "T1048",
+        "T1074"
+      ],
+      "atlas": [
+        "AML.T0057"
+      ],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 0,
+        "approve": 2
+      },
+      "recall": 1,
+      "prevented": 2,
+      "tot": 2
+    },
+    {
+      "family": "git-rce",
+      "desc": "RCE via git config / ext:: / hooks (supply-chain shaped)",
+      "llm": [
+        "LLM03",
+        "LLM05"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1059",
+        "T1195"
+      ],
+      "atlas": [
+        "AML.T0053"
+      ],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 4,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 4,
+      "tot": 4
+    },
+    {
+      "family": "injection-skill",
+      "desc": "Prompt injection in untrusted skill/tool text & tool results",
+      "llm": [
+        "LLM01",
+        "LLM05"
+      ],
+      "agentic": [
+        "T6",
+        "T12"
+      ],
+      "attack": [],
+      "atlas": [
+        "AML.T0051",
+        "AML.T0053"
+      ],
+      "nist": [
+        "MAP",
+        "MEASURE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 5,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 5,
+      "tot": 5
+    },
+    {
+      "family": "kernel-module",
+      "desc": "Kernel module / extension loading",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T3"
+      ],
+      "attack": [
+        "T1547"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 0,
+        "approve": 2
+      },
+      "recall": 1,
+      "prevented": 2,
+      "tot": 2
+    },
+    {
+      "family": "obfuscation",
+      "desc": "Var-indirection / hex / IFS / brace evasion of the classifier",
+      "llm": [
+        "LLM01",
+        "LLM06"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1027",
+        "T1140"
+      ],
+      "atlas": [
+        "AML.T0054"
+      ],
+      "nist": [
+        "MEASURE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 5,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 5,
+      "tot": 5
+    },
+    {
+      "family": "parser-diff",
+      "desc": "Shell-parser-differential evasion (quoting/skeleton tricks)",
+      "llm": [
+        "LLM05"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1027",
+        "T1036"
+      ],
+      "atlas": [
+        "AML.T0054"
+      ],
+      "nist": [
+        "MEASURE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 8,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 8,
+      "tot": 8
+    },
+    {
+      "family": "persistence-unix",
+      "desc": "Unix persistence (cron, rc/profile, systemd)",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T2"
+      ],
+      "attack": [
+        "T1053",
+        "T1546"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 15,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 15,
+      "tot": 15
+    },
+    {
+      "family": "persistence-win",
+      "desc": "Windows persistence (Run keys, scheduled tasks, services)",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T2"
+      ],
+      "attack": [
+        "T1547",
+        "T1053"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 11,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 11,
+      "tot": 11
+    },
+    {
+      "family": "privesc",
+      "desc": "Local privilege escalation",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T3"
+      ],
+      "attack": [
+        "T1548",
+        "T1068"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 0,
+        "approve": 3
+      },
+      "recall": 1,
+      "prevented": 3,
+      "tot": 3
+    },
+    {
+      "family": "rce-download",
+      "desc": "Ingress-and-execute download cradles (curl|bash, certutil, LOLBins)",
+      "llm": [
+        "LLM05",
+        "LLM06"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1105",
+        "T1059"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 22,
+        "approve": 1
+      },
+      "recall": 1,
+      "prevented": 23,
+      "tot": 23
+    },
+    {
+      "family": "rce-pipe",
+      "desc": "Pipe-to-interpreter remote code execution",
+      "llm": [
+        "LLM05",
+        "LLM06"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1059"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 6,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 6,
+      "tot": 6
+    },
+    {
+      "family": "reverse-shell",
+      "desc": "Reverse/bind shells across languages and tools",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1059",
+        "T1219"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 9,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 9,
+      "tot": 9
+    },
+    {
+      "family": "risky-infra",
+      "desc": "Dual-use infra actions escalated for human review",
+      "llm": [
+        "LLM06",
+        "LLM10"
+      ],
+      "agentic": [
+        "T2",
+        "T4"
+      ],
+      "attack": [
+        "T1496"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "partial",
+      "samples": {
+        "block": 0,
+        "approve": 19
+      },
+      "recall": 0.9473684210526315,
+      "prevented": 18,
+      "tot": 19
+    },
+    {
+      "family": "rm-root",
+      "desc": "Root/system-root deletion variants",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T2",
+        "T4"
+      ],
+      "attack": [
+        "T1485"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 2,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 2,
+      "tot": 2
+    },
+    {
+      "family": "secret-theft",
+      "desc": "Reading credentials / keys / cred stores",
+      "llm": [
+        "LLM02"
+      ],
+      "agentic": [
+        "T2",
+        "T3"
+      ],
+      "attack": [
+        "T1552",
+        "T1003"
+      ],
+      "atlas": [
+        "AML.T0057"
+      ],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 2,
+        "approve": 10
+      },
+      "recall": 1,
+      "prevented": 12,
+      "tot": 12
+    },
+    {
+      "family": "security-disable",
+      "desc": "Disabling defenses (firewall, AV, SELinux, audit)",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T3"
+      ],
+      "attack": [
+        "T1562"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 9,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 9,
+      "tot": 9
+    },
+    {
+      "family": "ssrf-metadata",
+      "desc": "Cloud instance-metadata SSRF (IMDS credential theft)",
+      "llm": [
+        "LLM02",
+        "LLM06"
+      ],
+      "agentic": [
+        "T2",
+        "T3"
+      ],
+      "attack": [
+        "T1552"
+      ],
+      "atlas": [
+        "AML.T0057"
+      ],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "core",
+      "samples": {
+        "block": 9,
+        "approve": 2
+      },
+      "recall": 1,
+      "prevented": 11,
+      "tot": 11
+    },
+    {
+      "family": "type-confusion",
+      "desc": "Malformed/typed action inputs the classifier must survive (fail-safe)",
+      "llm": [
+        "LLM05"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1027"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE"
+      ],
+      "scope": "partial",
+      "samples": {
+        "block": 5,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 5,
+      "tot": 5
+    },
+    {
+      "family": "windows-ttp",
+      "desc": "Windows LOLBin / system-binary-proxy abuse",
+      "llm": [
+        "LLM06"
+      ],
+      "agentic": [
+        "T11"
+      ],
+      "attack": [
+        "T1218",
+        "T1003"
+      ],
+      "atlas": [],
+      "nist": [
+        "MEASURE",
+        "MANAGE"
+      ],
+      "scope": "strong",
+      "samples": {
+        "block": 8,
+        "approve": 0
+      },
+      "recall": 1,
+      "prevented": 8,
+      "tot": 8
+    }
+  ],
+  "atlas": {
+    "AML.T0051": "LLM Prompt Injection",
+    "AML.T0053": "LLM Plugin Compromise",
+    "AML.T0054": "LLM Jailbreak",
+    "AML.T0057": "LLM Data Leakage"
+  }
+}

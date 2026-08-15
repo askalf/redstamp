@@ -208,6 +208,32 @@ outside-contributed corpus, and the [protocol](protocol.md) makes that a drop-in
 any labeled JSONL with `{id, action, expect}` scores here unchanged, no warden
 code involved. This corpus is the reference that invites those contributions.
 
+## Third-party corpora (nobody here wrote these)
+
+The external ATT&CK corpus above is *externally taxonomized* but still assembled
+in-repo. Two corpora go further — the commands come from outside datasets:
+
+- **tldr-pages** (`thirdparty-tldr.json`, CC-BY-4.0) — 1,200+ real benign
+  developer commands, the make-or-break **precision** test.
+- **Atomic Red Team** (`thirdparty-atomic.json`, MIT) — real ATT&CK attack
+  commands across 45 techniques, plus benign discovery, read **axis-aware**
+  (command-semantics vs opaque pre-staged-binary execution).
+
+Scored honestly — wins and misses — in
+**[THIRD-PARTY-RESULTS.md](THIRD-PARTY-RESULTS.md)** (`node arena/thirdparty.mjs`).
+Precision held (0 hard false-positives on 1,200+ external benign commands), and
+the Atomic import **surfaced real on-axis detection gaps** — the whole point of
+an outside corpus. Provenance, license map, and roadmap:
+**[THIRD-PARTY-CORPORA.md](THIRD-PARTY-CORPORA.md)**.
+
+## Framework coverage
+
+Every detection family mapped to the frameworks security teams actually use —
+**OWASP Top 10 for LLM Apps (2025)**, **OWASP Agentic AI Threats**, **MITRE
+ATT&CK**, **MITRE ATLAS**, **NIST AI RMF** — with each coverage claim backed by a
+measured recall number, and every out-of-scope row said out loud:
+**[FRAMEWORKS.md](FRAMEWORKS.md)** (`node arena/frameworks.mjs`).
+
 ## Honest caveats
 
 - **The corpus is warden-authored.** warden topping a corpus warden wrote is the
