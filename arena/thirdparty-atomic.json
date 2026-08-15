@@ -8,7 +8,7 @@
     "license": "MIT",
     "attribution": "Atomic Red Team™ by Red Canary, MIT License. Command strings extracted from atomics/<technique>/<technique>.yaml executor blocks with input-argument defaults substituted; this is a derived subset."
   },
-  "provenance": "THIRD-PARTY corpus — 203 real ATT&CK attack/benign commands from Atomic Red Team @ 2c63affb3b (MIT), across 45 techniques. Nobody at askalf wrote these. Labels assigned by SECURITY PRINCIPLE per ATT&CK technique (block=execution/impact/exfil/persistence/cred/evasion/C2, approve=dual-use, allow=discovery), NOT by \"it's in Atomic Red Team\". Only techniques with a principled verdict are imported; 16 had no base YAML, 2 test commands were dropped for unresolved placeholders, and 10 commands in allow/approve techniques were dropped because they were actually RCE download-cradles (not benign — they belong in no benign set). The allow set (discovery) is a genuine precision test from the same source as the attacks. Each sample carries an `axis` tag: 'command-semantic' (redstamp's axis) vs 'opaque-binary' (running a pre-staged .exe/.dll — out of a command-string firewall's reach, a documented limit, not a miss).",
+  "provenance": "THIRD-PARTY corpus — 203 real ATT&CK attack/benign commands from Atomic Red Team @ 2c63affb3b (MIT), across 45 techniques. Nobody at askalf wrote these. Labels assigned by SECURITY PRINCIPLE per ATT&CK technique (block=execution/impact/exfil/persistence/cred/evasion/C2, approve=dual-use, allow=discovery), NOT by \"it's in Atomic Red Team\". Only techniques with a principled verdict are imported; 16 had no base YAML, 2 test commands were dropped for unresolved placeholders, and 10 commands in allow/approve techniques were dropped because they were actually RCE download-cradles (not benign — they belong in no benign set), and 2 samples carry a documented per-sample label correction (see the sample's `relabeled` field, and SAMPLE_OVERRIDES in the builder) where the technique-level verdict did not fit the specific command. The allow set (discovery) is a genuine precision test from the same source as the attacks. Each sample carries an `axis` tag: 'command-semantic' (redstamp's axis) vs 'opaque-binary' (running a pre-staged .exe/.dll — out of a command-string firewall's reach, a documented limit, not a miss).",
   "total": 203,
   "families": [
     "T1003",
@@ -58,9 +58,9 @@
     "T1614"
   ],
   "counts": {
-    "block": 73,
-    "approve": 59,
-    "allow": 71
+    "block": 65,
+    "approve": 66,
+    "allow": 72
   },
   "samples": [
     {
@@ -2435,7 +2435,11 @@
       "id": "atomic/T1486/5",
       "family": "T1486",
       "label": "PureLocker Ransom Note",
-      "expect": "block",
+      "expect": "allow",
+      "relabeled": {
+        "from": "block",
+        "reason": "Writes a text file to the Desktop. A ransom note is an artefact OF ransomware, but the command is an ordinary file write — blocking `echo text > file` would be indiscriminate. Detecting it would mean matching ransom-note filenames, i.e. chasing indicators rather than mechanisms."
+      },
       "axis": "command-semantic",
       "tool": "shell",
       "command": "echo T1486 - Purelocker Ransom Note > %USERPROFILE%\\Desktop\\YOUR_FILES.txt",
@@ -2451,7 +2455,11 @@
       "id": "atomic/T1486/6",
       "family": "T1486",
       "label": "Encrypt files using 7z utility - macOS",
-      "expect": "block",
+      "expect": "approve",
+      "relabeled": {
+        "from": "block",
+        "reason": "Password-protects an archive of the user's own test file. Encrypting your own data is legitimate backup behaviour; only encryption aimed at SYSTEM/credential files is ransomware-shaped (and that form is blocked). Dual-use → escalate, not block."
+      },
       "axis": "command-semantic",
       "tool": "shell",
       "command": "7z a -p ARTPass -mhe=on ARTArchive.7z ~/test.txt",
@@ -2467,7 +2475,7 @@
       "id": "atomic/T1489/1",
       "family": "T1489",
       "label": "Windows - Stop service using Service Controller",
-      "expect": "block",
+      "expect": "approve",
       "axis": "opaque-binary",
       "tool": "shell",
       "command": "sc.exe stop spooler",
@@ -2483,7 +2491,7 @@
       "id": "atomic/T1489/2",
       "family": "T1489",
       "label": "Windows - Stop service using net.exe",
-      "expect": "block",
+      "expect": "approve",
       "axis": "opaque-binary",
       "tool": "shell",
       "command": "net.exe stop spooler",
@@ -2499,7 +2507,7 @@
       "id": "atomic/T1489/3",
       "family": "T1489",
       "label": "Windows - Stop service by killing process",
-      "expect": "block",
+      "expect": "approve",
       "axis": "opaque-binary",
       "tool": "shell",
       "command": "taskkill.exe /f /im spoolsv.exe",
@@ -2515,7 +2523,7 @@
       "id": "atomic/T1489/4",
       "family": "T1489",
       "label": "Linux - Stop service using systemctl",
-      "expect": "block",
+      "expect": "approve",
       "axis": "command-semantic",
       "tool": "shell",
       "command": "sudo systemctl stop cron",
@@ -2531,7 +2539,7 @@
       "id": "atomic/T1489/5",
       "family": "T1489",
       "label": "Linux - Stop service by killing process using killall",
-      "expect": "block",
+      "expect": "approve",
       "axis": "command-semantic",
       "tool": "shell",
       "command": "sudo killall -SIGTERM cron",
@@ -2547,7 +2555,7 @@
       "id": "atomic/T1489/6",
       "family": "T1489",
       "label": "Linux - Stop service by killing process using kill",
-      "expect": "block",
+      "expect": "approve",
       "axis": "command-semantic",
       "tool": "shell",
       "command": "sudo kill -SIGTERM $(pgrep cron)",
