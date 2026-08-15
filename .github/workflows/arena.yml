@@ -59,6 +59,24 @@ jobs:
           python -m pip install --quiet --no-deps -e "git+https://github.com/ressl/mcp-firewall.git@5f01d8b66480cdc2b7c7a6850e239e4d0f65df07#egg=mcp-firewall"
           python -c "import mcp_firewall; print('mcp-firewall importable')"
 
+      # ── LLM Guard (Protect AI / Palo Alto Networks) ───────────────────────
+      # A recognized-vendor guardrail that runs with NO paid key and NO gated
+      # model: its default prompt-injection classifier
+      # (protectai/deberta-v3-base-prompt-injection-v2) is public — only the
+      # -small variant is gated. Partial-axis by design (it screens model I/O,
+      # not shell semantics); see arena/adapters.json for the honest read.
+      - name: Cache HuggingFace models (LLM Guard)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-llm-guard-0.3.16-${{ runner.os }}
+
+      - name: Install LLM Guard (pinned)
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'llm-guard==0.3.16'
+          python -c "import llm_guard; print('llm-guard importable')"
+
       - name: Download pipelock (pinned) + verify sha256
         run: |
           set -euo pipefail
@@ -167,6 +185,26 @@ jobs:
               }
             }
             console.log('pipelock + aegis + mcp-firewall scored on all ' + files.length + ' corpora');
+          "
+
+      # Reported, not enforced — yet. LLM Guard depends on a model download, so
+      # a transient HuggingFace outage should not fail an unrelated PR. It moves
+      # into the hard assertion above once it has proven stable across runs; the
+      # point of printing it is that a silently-missing row is visible rather
+      # than quietly absent from the scoreboard.
+      - name: Report optional competitor availability
+        if: always()
+        run: |
+          node -e "
+            const rs = require('./arena/results.json').results;
+            for (const id of ['llm-guard', 'llamafirewall']) {
+              const p = rs.find((r) => r.id === id);
+              if (p && p.available) {
+                console.log(id + ': SCORED (recall ' + (100 * p.recallBlock).toFixed(1) + '%, precision ' + (100 * p.precision).toFixed(1) + '%)');
+              } else {
+                console.log('::warning::' + id + ' did not score — ' + ((p && p.reason) || 'not registered'));
+              }
+            }
           "
 
       - name: Dump AEGIS log

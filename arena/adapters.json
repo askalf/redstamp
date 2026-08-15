@@ -50,6 +50,17 @@
       "notes": "PARTIAL-AXIS: an LLM-I/O guardrail; PromptGuard screens prompt-injection TEXT, not shell/tool-call actions. Fair only on the injection family (see README threat-model axes). Adapter is committed but UNAVAILABLE until `pip install llamafirewall` + a configured gated Meta HF model — the runner skips it until then."
     },
     {
+      "id": "llm-guard",
+      "name": "LLM Guard (input scanners)",
+      "cmd": ["python", "arena/adapters/llm_guard_adapter.py"],
+      "deterministic": true,
+      "offline": true,
+      "license": "MIT",
+      "homepage": "https://github.com/protectai/llm-guard",
+      "axis": "llm-io-guardrail",
+      "notes": "PARTIAL-AXIS: the guardrail toolkit from Protect AI (now Palo Alto Networks). It screens the TEXT sent to a model, not tool-call semantics, so it is fair on the injection family and is EXPECTED to allow shell RCE — read it as a complementary layer, not a loss (same reading as LlamaFirewall). Scored with the two out-of-box INPUT scanners that need no operator-written rules: PromptInjection (its flagship DeBERTa classifier) and Secrets (detect-secrets, regex/entropy). Code/BanCode are deliberately NOT enabled — this corpus IS commands, so they would flag nearly everything and manufacture a meaningless precision collapse. NO key and NO gated model required: the default `protectai/deberta-v3-base-prompt-injection-v2` is public (only the -small variant is gated), which is why this row runs free in CI. BINARY (valid/invalid) — no human-in-the-loop tier, so it can never earn +gate credit. Needs `pip install llm-guard` and a first-run model download (the Arena workflow installs it and caches the HuggingFace cache)."
+    },
+    {
       "id": "pipelock",
       "name": "Pipelock (scan API)",
       "cmd": ["node", "arena/adapters/pipelock.mjs"],
