@@ -90,11 +90,12 @@ const md = [
   '',
   `### On-axis detection gaps (${atomic.misses.length}) — attacks redstamp should catch but does not`,
   '',
-  'These are command-semantic attacks (redstamp\'s axis) that a correct firewall should block or escalate. Each is a candidate detection rule.',
+  'These are command-semantic attacks (redstamp\'s axis) that a correct firewall should block or escalate. Each is a candidate detection rule. (A bulleted list, not a table, so pipes and backslashes in the commands render verbatim.)',
   '',
-  '| ATT&CK | verdict now | command |',
-  '|---|---|---|',
-  ...atomic.misses.map((m) => `| ${m.family} | ${m.decision} | \`${m.command.replace(/\|/g, '\\|').replace(/`/g, '')}\` |`),
+  // Rendered as list items: a code span inside a list needs no pipe/backslash
+  // escaping (unlike a table cell), so the command is shown verbatim except for
+  // backticks, which would close the span (swapped to a single quote).
+  ...atomic.misses.map((m) => `- **${m.family}** (currently \`${m.decision}\`) — \`${m.command.replace(/`/g, "'")}\``),
   '',
   '_Themes: exfil over ssh/tar and DNS; inhibit-recovery variants (`fsutil usn deletejournal`, `wbadmin delete catalog`, WMI shadow-copy delete); ransomware-shaped encryption of system files (`gpg -c /etc/passwd`, `7z -p`, `ccencrypt`, `openssl`); `dd` overwrite of a logfile; `kubectl` privileged-pod escape; credential-store enumeration (`vaultcmd`). Closing these raises real-world recall AND a future Atomic Red Team score._',
   '',

