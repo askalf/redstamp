@@ -226,6 +226,15 @@ the Atomic import **surfaced real on-axis detection gaps** — the whole point o
 an outside corpus. Provenance, license map, and roadmap:
 **[THIRD-PARTY-CORPORA.md](THIRD-PARTY-CORPORA.md)**.
 
+**Every competitor is scored on these too.** The Arena workflow runs the full
+board against both third-party corpora, which is the most neutral comparison this
+benchmark can make: *no participant wrote the test set.* The Atomic run measures
+recall on real ATT&CK commands; the tldr run measures precision and friction on
+1,200+ real benign commands, which is where an escalate-by-default posture shows
+its true cost. Read the Atomic table with the axis caveat above — the
+opaque-binary samples are unreachable for **every** command-string tool on the
+board, so that slice is a shared floor rather than a differentiator.
+
 ## Framework coverage
 
 Every detection family mapped to the frameworks security teams actually use —

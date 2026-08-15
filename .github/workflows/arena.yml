@@ -114,11 +114,32 @@ jobs:
       - name: Run arena (external MITRE ATT&CK corpus)
         run: node arena/run.mjs --corpus external-corpus.json
 
+      # The two corpora below are THIRD-PARTY: the commands come from Atomic Red
+      # Team and tldr-pages, not from this repo. Scoring every competitor on them
+      # is the most neutral comparison the arena can make — no participant wrote
+      # the test set. The Atomic run measures recall on real ATT&CK commands; the
+      # tldr run measures precision/friction on 1,200+ real benign commands,
+      # which is where escalate-by-default postures show their true cost.
+      - name: Run arena (third-party Atomic Red Team corpus)
+        run: node arena/run.mjs --corpus thirdparty-atomic.json
+
+      - name: Run arena (third-party tldr-pages benign corpus)
+        run: node arena/run.mjs --corpus thirdparty-tldr.json
+
+      - name: Score redstamp on the third-party corpora (axis-aware)
+        run: node arena/thirdparty.mjs
+
       - name: Assert competitors were actually scored
         run: |
           set -euo pipefail
           node -e "
-            for (const f of ['arena/results.json', 'arena/external-corpus-results.json']) {
+            const files = [
+              'arena/results.json',
+              'arena/external-corpus-results.json',
+              'arena/thirdparty-atomic-results.json',
+              'arena/thirdparty-tldr-results.json',
+            ];
+            for (const f of files) {
               const rs = require('./' + f).results;
               for (const id of ['pipelock', 'aegis', 'mcp-firewall']) {
                 const p = rs.find((r) => r.id === id);
@@ -132,7 +153,7 @@ jobs:
                 }
               }
             }
-            console.log('pipelock + aegis + mcp-firewall scored on both corpora');
+            console.log('pipelock + aegis + mcp-firewall scored on all ' + files.length + ' corpora');
           "
 
       - name: Dump AEGIS log
@@ -149,5 +170,10 @@ jobs:
             arena/results.json
             arena/EXTERNAL-CORPUS-RESULTS.md
             arena/external-corpus-results.json
+            arena/THIRDPARTY-ATOMIC-RESULTS.md
+            arena/thirdparty-atomic-results.json
+            arena/THIRDPARTY-TLDR-RESULTS.md
+            arena/thirdparty-tldr-results.json
+            arena/THIRD-PARTY-RESULTS.md
             /tmp/pipelock.log
             /tmp/aegis.log
