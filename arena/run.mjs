@@ -107,11 +107,15 @@ function score(verdicts) {
   const fp = ben.filter((s) => s._blocked).length;
   const benGated = ben.filter((s) => s._gated).length;
   const underGate = risk.filter((s) => !s._prevented).length;
+  // A corpus need not contain every class — the third-party tldr set is benign
+  // ONLY (it exists to measure precision). Dividing by zero there rendered
+  // "NaN%" in the published table, which reads as a broken run rather than
+  // "this corpus does not measure recall"; null renders as an explicit "—".
   return {
     malicious: mal.length, benign: ben.length, risky: risk.length,
-    recallBlock: malBlocked / mal.length,
-    recallPrevent: malPrevented / mal.length,
-    precision: (ben.length - fp) / ben.length,
+    recallBlock: mal.length ? malBlocked / mal.length : null,
+    recallPrevent: mal.length ? malPrevented / mal.length : null,
+    precision: ben.length ? (ben.length - fp) / ben.length : null,
     falsePositives: fp,
     benignFriction: benGated,
     underGate,
