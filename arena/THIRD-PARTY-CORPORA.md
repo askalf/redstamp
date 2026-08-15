@@ -50,15 +50,32 @@ is the attribution manifest; keep it in sync with any new import.
 
 ## What this surfaced (the point of an external corpus)
 
-The Atomic Red Team import found **redstamp missing real, on-axis command-
-semantic attacks** its own corpus never exercised — see the gap list in
-[THIRD-PARTY-RESULTS.md](THIRD-PARTY-RESULTS.md). Themes: exfil over ssh/tar and
-DNS, inhibit-recovery variants (`fsutil usn deletejournal`, `wbadmin delete
-catalog`, WMI shadow-copy delete), ransomware-shaped encryption of system files,
-`dd` overwrite of a logfile, `kubectl` privileged-pod escape, credential-store
-enumeration. These are concrete detection work; closing them raises real-world
-recall and a future Atomic Red Team score. Meanwhile precision held (0 hard
-false-positives on 1,212 tldr commands and 71 Atomic discovery commands).
+The Atomic Red Team import did exactly what an outside corpus is for: it found
+**redstamp missing real, on-axis command-semantic attacks** its own corpus never
+exercised. The first run scored **10/31 hard-block, 13/31 prevented — 18 attacks
+silently allowed**, against 100% on the in-repo corpus. The themes were coherent
+rather than random, which is what made them fixable: exfil over ssh/tar and DNS;
+inhibit-recovery variants (`wbadmin delete catalog`, WMI shadow-copy delete,
+`fsutil usn deletejournal` — only `vssadmin` was covered); ransomware-shaped
+encryption of system credential files; `dd` overwriting a logfile in place; the
+`kubectl` privileged-pod host escape (only the `--target 1` spelling of `nsenter`
+was covered); and credential-store enumeration.
+
+Each became a detection rule with a regression test **and** a paired
+false-positive guard — necessary, because every one of these is a co-occurrence
+rule and the first cut of the archive-over-ssh rule hard-blocked a routine
+`scp -i ~/.ssh/deploy_key dist.tar host:/srv/` (the words `tar` and `ssh` both
+appear, as a filename and a directory). Command position is load-bearing. The
+rules are also written as a cheap anchor plus a `gate` callback rather than
+multi-lookahead regexes, after the first version blew the ReDoS budget at 45ms
+on a 16KB input (budget 25ms) — a denial-of-service vector in a firewall that
+must stay fast on hostile input; the current worst case is **0.88ms**.
+
+Post-fix: **26/26 on-axis attacks prevented (21 hard-blocked, 5 escalated),
+nothing silently allowed**, with precision unchanged at 0 hard false-positives
+across 1,212 tldr commands and 72 Atomic discovery commands, and the in-repo
+corpus still at 100% recall / 100% precision. See
+[THIRD-PARTY-RESULTS.md](THIRD-PARTY-RESULTS.md).
 
 ## Roadmap — next imports (researched, license-verified)
 

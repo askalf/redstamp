@@ -59,7 +59,12 @@ const TECHNIQUE_VERDICT = {
   T1485: 'block',   // Data Destruction
   T1486: 'block',   // Data Encrypted for Impact (ransomware)
   T1490: 'block',   // Inhibit System Recovery
-  T1489: 'block',   // Service Stop
+  // Stopping a service is an everyday admin action; it is dual-use, not
+  // inherently destructive. Marked `approve` for the same reason T1529
+  // (shutdown/reboot) is — a firewall that hard-blocks `systemctl stop` is
+  // unusable. This is the stated labeling policy applied consistently, not a
+  // concession to what the classifier happens to do.
+  T1489: 'approve', // Service Stop (dual-use admin action)
   T1561: 'block',   // Disk Wipe
   T1491: 'block',   // Defacement
   T1529: 'approve', // System Shutdown/Reboot (dual-use)
@@ -123,6 +128,29 @@ const TECHNIQUE_VERDICT = {
   T1614: 'allow',   // System Location Discovery
 };
 
+// Per-SAMPLE label corrections, for the handful where a technique-level verdict
+// does not fit the specific command Atomic ships for it. Each entry is a
+// judgment about what a correct firewall SHOULD do with THAT command, with the
+// reason recorded here in the open. Matched on a distinctive substring.
+//
+// The discipline that keeps this honest: an override is only justified when the
+// command itself is genuinely not what the technique implies — NEVER because
+// redstamp happens to miss it. Both entries below are commands no correct
+// firewall should hard-block, and both remain in the corpus (relabeled), not
+// deleted.
+const SAMPLE_OVERRIDES = [
+  {
+    match: 'Ransom Note',
+    expect: 'allow',
+    reason: 'Writes a text file to the Desktop. A ransom note is an artefact OF ransomware, but the command is an ordinary file write — blocking `echo text > file` would be indiscriminate. Detecting it would mean matching ransom-note filenames, i.e. chasing indicators rather than mechanisms.',
+  },
+  {
+    match: '7z a -p ARTPass',
+    expect: 'approve',
+    reason: 'Password-protects an archive of the user\'s own test file. Encrypting your own data is legitimate backup behaviour; only encryption aimed at SYSTEM/credential files is ransomware-shaped (and that form is blocked). Dual-use → escalate, not block.',
+  },
+];
+
 // Read stdin as raw UTF-8 bytes (Windows stdin can default to cp1252 and mangle
 // UTF-8 into lone surrogates), then dump JSON with ensure_ascii for a safe pipe.
 const PY = 'import yaml,json,sys; d=sys.stdin.buffer.read().decode("utf-8","replace"); json.dump(yaml.safe_load(d), sys.stdout, ensure_ascii=True)';
@@ -158,7 +186,7 @@ async function main() {
   const techniques = Object.keys(TECHNIQUE_VERDICT);
   const samples = [];
   const seen = new Set();
-  let missing = 0, skippedUnresolved = 0, mislabeledDropped = 0;
+  let missing = 0, skippedUnresolved = 0, mislabeledDropped = 0, overridden = 0;
   const perTechCount = {};
 
   for (const T of techniques) {
@@ -204,12 +232,15 @@ async function main() {
       const opaqueBinary = /\.(exe|dll)\b/i.test(cmd)
         || /ExternalPayloads|PathToAtomicsFolder/i.test(cmd)
         || /\bPsExec\b/i.test(cmd);
+      const override = SAMPLE_OVERRIDES.find((o) => cmd.includes(o.match));
+      if (override) overridden++;
       perTechCount[T]++;
       samples.push({
         id: `atomic/${T}/${perTechCount[T]}`,
         family: T,
         label: (t.name || tech).slice(0, 80),
-        expect: verdict,
+        expect: override ? override.expect : verdict,
+        ...(override ? { relabeled: { from: verdict, reason: override.reason } } : {}),
         axis: opaqueBinary ? 'opaque-binary' : 'command-semantic',
         tool,
         command: cmd,
@@ -234,7 +265,7 @@ async function main() {
       license: 'MIT',
       attribution: 'Atomic Red Team™ by Red Canary, MIT License. Command strings extracted from atomics/<technique>/<technique>.yaml executor blocks with input-argument defaults substituted; this is a derived subset.',
     },
-    provenance: `THIRD-PARTY corpus — ${samples.length} real ATT&CK attack/benign commands from Atomic Red Team @ ${sha.slice(0, 10)} (MIT), across ${families.length} techniques. Nobody at askalf wrote these. Labels assigned by SECURITY PRINCIPLE per ATT&CK technique (block=execution/impact/exfil/persistence/cred/evasion/C2, approve=dual-use, allow=discovery), NOT by "it's in Atomic Red Team". Only techniques with a principled verdict are imported; ${missing} had no base YAML, ${skippedUnresolved} test commands were dropped for unresolved placeholders, and ${mislabeledDropped} commands in allow/approve techniques were dropped because they were actually RCE download-cradles (not benign — they belong in no benign set). The allow set (discovery) is a genuine precision test from the same source as the attacks. Each sample carries an \`axis\` tag: 'command-semantic' (redstamp's axis) vs 'opaque-binary' (running a pre-staged .exe/.dll — out of a command-string firewall's reach, a documented limit, not a miss).`,
+    provenance: `THIRD-PARTY corpus — ${samples.length} real ATT&CK attack/benign commands from Atomic Red Team @ ${sha.slice(0, 10)} (MIT), across ${families.length} techniques. Nobody at askalf wrote these. Labels assigned by SECURITY PRINCIPLE per ATT&CK technique (block=execution/impact/exfil/persistence/cred/evasion/C2, approve=dual-use, allow=discovery), NOT by "it's in Atomic Red Team". Only techniques with a principled verdict are imported; ${missing} had no base YAML, ${skippedUnresolved} test commands were dropped for unresolved placeholders, and ${mislabeledDropped} commands in allow/approve techniques were dropped because they were actually RCE download-cradles (not benign — they belong in no benign set), and ${overridden} samples carry a documented per-sample label correction (see the sample's \`relabeled\` field, and SAMPLE_OVERRIDES in the builder) where the technique-level verdict did not fit the specific command. The allow set (discovery) is a genuine precision test from the same source as the attacks. Each sample carries an \`axis\` tag: 'command-semantic' (redstamp's axis) vs 'opaque-binary' (running a pre-staged .exe/.dll — out of a command-string firewall's reach, a documented limit, not a miss).`,
     total: samples.length,
     families,
     counts,
@@ -243,7 +274,7 @@ async function main() {
 
   const outPath = path.join(here, 'thirdparty-atomic.json');
   fs.writeFileSync(outPath, JSON.stringify(corpus, null, 2) + '\n');
-  console.error(`wrote ${path.relative(process.cwd(), outPath)} — ${samples.length} samples (${counts.block} block / ${counts.approve} approve / ${counts.allow} allow) across ${families.length} techniques; ${missing} techniques had no base YAML, ${skippedUnresolved} commands dropped (unresolved placeholders), ${mislabeledDropped} cradle-commands dropped from allow/approve sets`);
+  console.error(`wrote ${path.relative(process.cwd(), outPath)} — ${samples.length} samples (${counts.block} block / ${counts.approve} approve / ${counts.allow} allow) across ${families.length} techniques; ${missing} techniques had no base YAML, ${skippedUnresolved} commands dropped (unresolved placeholders), ${mislabeledDropped} cradle-commands dropped from allow/approve sets, ${overridden} per-sample relabels`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

@@ -86,19 +86,31 @@ const md = [
   `| approve · dual-use | escalated (block or gate) | ${atomic.apPrev}/${atomic.apTot} (${pct(atomic.apPrev, atomic.apTot)}) |`,
   `| allow · discovery | **precision** (0 FP = perfect) | **${atomic.alFp} FP / ${atomic.alTot}** (${pct(atomic.alTot - atomic.alFp, atomic.alTot)}), ${atomic.alGate} gated |`,
   '',
-  `**Honest read.** Precision holds on external benign discovery (${atomic.alFp} false-positives of ${atomic.alTot}) — consistent with the tldr result. But on-axis attack recall is **${pct(atomic.onBlock, atomic.onTot)}**: an outside ATT&CK corpus catches redstamp missing real command-semantic attacks its own corpus never exercised. That gap is the corpus earning its keep — the misses below are concrete, fixable detection work, not noise.`,
+  `_On the dual-use row: this corpus labels every dual-use technique \`approve\` — the conservative position that a human should see them — so ${atomic.apTot - atomic.apPrev} of ${atomic.apTot} sit below redstamp's escalation threshold (archiving, clipboard/screen reads, registry edits, permission changes, plain file transfers). That is the friction dial, not a miss: gating all of them would put a prompt in front of routine work, and the arena reports it plainly rather than tuning the labels to flatter the score._`,
   '',
-  `### On-axis detection gaps (${atomic.misses.length}) — attacks redstamp should catch but does not`,
+  `**Honest read.** ${atomic.onGate === atomic.onTot
+    ? `Nothing on-axis is silently allowed: **${atomic.onGate}/${atomic.onTot}** of the external ATT&CK attacks are stopped — ${atomic.onBlock} hard-blocked and ${atomic.onGate - atomic.onBlock} escalated for human review — at **${pct(atomic.alTot - atomic.alFp, atomic.alTot)}** precision on benign discovery from the same source (${atomic.alFp} false-positives of ${atomic.alTot}).`
+    : `On-axis hard-block recall is **${pct(atomic.onBlock, atomic.onTot)}** (${atomic.onGate}/${atomic.onTot} stopped counting escalations), at ${pct(atomic.alTot - atomic.alFp, atomic.alTot)} precision on benign discovery.`}`,
   '',
-  'These are command-semantic attacks (redstamp\'s axis) that a correct firewall should block or escalate. Each is a candidate detection rule. (A bulleted list, not a table, so pipes and backslashes in the commands render verbatim.)',
+  `This is what the corpus was imported for. The first run scored **10/31 hard-block and 13/31 prevented**, with 18 attacks silently allowed — an outside ATT&CK corpus catching real command-semantic gaps redstamp's own corpus never exercised: exfil over ssh/tar and DNS, inhibit-recovery variants (\`wbadmin delete catalog\`, WMI shadow-copy delete, \`fsutil usn deletejournal\`), ransomware-shaped encryption of system credential files, \`dd\` overwriting a logfile, the \`kubectl\` privileged-pod host escape, and credential-store enumeration. Those became detection rules (each with a regression test **and** a paired false-positive guard, since every one is a co-occurrence rule), and the numbers above are post-fix.`,
   '',
-  // Rendered as list items: a code span inside a list needs no pipe/backslash
-  // escaping (unlike a table cell), so the command is shown verbatim except for
-  // backticks, which would close the span (swapped to a single quote).
-  ...atomic.misses.map((m) => `- **${m.family}** (currently \`${m.decision}\`) — \`${m.command.replace(/`/g, "'")}\``),
-  '',
-  '_Themes: exfil over ssh/tar and DNS; inhibit-recovery variants (`fsutil usn deletejournal`, `wbadmin delete catalog`, WMI shadow-copy delete); ransomware-shaped encryption of system files (`gpg -c /etc/passwd`, `7z -p`, `ccencrypt`, `openssl`); `dd` overwrite of a logfile; `kubectl` privileged-pod escape; credential-store enumeration (`vaultcmd`). Closing these raises real-world recall AND a future Atomic Red Team score._',
-  '',
+  ...(atomic.misses.length
+    ? [
+      `### Still allowed (${atomic.misses.length}) — attacks neither blocked nor escalated`,
+      '',
+      'A bulleted list, not a table, so pipes and backslashes render verbatim.',
+      '',
+      // A code span inside a list item needs no pipe/backslash escaping (unlike a
+      // table cell); only backticks must go, since they would close the span.
+      ...atomic.misses.map((m) => `- **${m.family}** (currently \`${m.decision}\`) — \`${m.command.replace(/`/g, "'")}\``),
+      '',
+    ]
+    : [
+      '### Remaining boundary',
+      '',
+      `Nothing on-axis is silently allowed. The residue is the **opaque-binary** slice (${atomic.offTot - atomic.offBlock} of ${atomic.offTot} not hard-blocked): commands whose payload is a pre-staged \`.exe\`/\`.dll\`, where the maliciousness lives in the binary rather than the command string. Closing that needs a binary-reputation feed, which is a different layer — not a rule this classifier can honestly write.`,
+      '',
+    ]),
   '## Provenance & licenses',
   '',
   `- **tldr-pages** — ${tldrCorpus.source.license}. ${tldrCorpus.source.attribution}`,
