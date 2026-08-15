@@ -99,7 +99,20 @@ jobs:
           # DB_PATH defaults to ./agentguard.db (cwd /app, root-owned) but the
           # image runs as USER node — point it at /data, which the Dockerfile
           # creates writable, or the gateway crashes on first write.
-          docker run -d --name aegis -p 8080:8080 -e DB_PATH=/data/agentguard.db aegis-gateway:pinned
+          #
+          # RATE_LIMIT: AEGIS ships a 100-request/60s limit. A benchmark fires
+          # thousands of calls from one host, so the default starves it — it
+          # served ~1,000 requests and returned 429 to ~1,200 more, which made
+          # it look non-deterministic (verdicts differed between scoring passes)
+          # and marked it UNAVAILABLE on the 1,212-sample benign corpus. None of
+          # that is a security property; it is request volume, not content. We
+          # raise the limit so AEGIS is judged on its VERDICTS, the same
+          # allowance already made for mcp-firewall's global rate limit.
+          docker run -d --name aegis -p 8080:8080 \
+            -e DB_PATH=/data/agentguard.db \
+            -e RATE_LIMIT_MAX=100000000 \
+            -e RATE_LIMIT_WINDOW=1000 \
+            aegis-gateway:pinned
           echo "waiting for AEGIS gateway…"
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health || true)
