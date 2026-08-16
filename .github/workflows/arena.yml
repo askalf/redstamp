@@ -71,10 +71,12 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-llm-guard-0.3.16-${{ runner.os }}
 
-      - name: Install LLM Guard (pinned)
+      - name: Install LLM Guard (hash-pinned)
+        # llm-guard 0.3.16 and its whole transitive closure, frozen with
+        # hashes (arena/requirements-llm-guard.in has the recompile recipe).
         run: |
           set -euo pipefail
-          python -m pip install --quiet 'llm-guard==0.3.16'
+          python -m pip install --quiet --require-hashes -r arena/requirements-llm-guard.txt
           python -c "import llm_guard; print('llm-guard importable')"
 
       - name: Download pipelock (pinned) + verify sha256
