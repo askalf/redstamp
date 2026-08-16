@@ -1,0 +1,15 @@
+# LLM Guard (Protect AI / Palo Alto Networks), the arena-pinned version.
+# The whole transitive closure — transformers, torch and its CUDA wheels —
+# is frozen with hashes in requirements-llm-guard.txt so the arena install
+# is reproducible and Scorecard credits it as pinned.
+#
+# Recompile (needs the Linux resolution the runner sees, so pass the target
+# platform explicitly rather than resolving for whatever host you're on):
+#   uv pip compile requirements-llm-guard.in \
+#     --python-version 3.11 --python-platform x86_64-unknown-linux-gnu \
+#     --generate-hashes --no-annotate --no-header \
+#     -o requirements-llm-guard.txt
+#
+# Bumping the version here means re-running that command and committing the
+# regenerated .txt — the workflow installs from the .txt, never from this file.
+llm-guard==0.3.16
