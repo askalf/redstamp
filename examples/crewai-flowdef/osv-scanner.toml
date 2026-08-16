@@ -1,8 +1,9 @@
 # Suppression scoped to this example's manifest (requirements.txt) only.
 #
 # redstamp's own supply chain is not affected by anything below. No workflow
-# installs this file — arena.yml is the only pip step in CI and it installs the
-# hash-pinned arena/requirements-mcp-firewall.txt, which has zero OSV hits.
+# installs this file — the only pip steps in CI are arena.yml's, which install
+# hash-pinned closures of the competitors the arena scores (see
+# arena/osv-scanner.toml for what those pull in and why they stay pinned).
 # This file exists so a user who runs the CrewAI example knows what they are
 # pulling in, and so the Scorecard Vulnerabilities check reflects that.
 
