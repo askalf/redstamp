@@ -7,16 +7,68 @@
 # This file exists so a user who runs the CrewAI example knows what they are
 # pulling in, and so the Scorecard Vulnerabilities check reflects that.
 
+# ── chromadb ────────────────────────────────────────────────────────
+#
+# Everything below is chromadb, reached only transitively: requirements.txt
+# pins crewai==1.15.6, whose own metadata requires chromadb~=1.1.0. Three
+# facts apply to every entry, so they are stated once here rather than
+# repeated in each reason:
+#
+#   1. No fixed release exists. Every advisory below is affected through
+#      chromadb 1.5.9, which is also the latest release on PyPI. These are
+#      not "bump the dep" findings — there is nothing to bump to.
+#   2. crewai's ~=1.1.0 caps the resolved version below 1.2.0 anyway, so the
+#      pin is a second, independent reason no bump clears them.
+#   3. Unreachable in this example. A CrewAI Flow never constructs a Chroma
+#      client; _musl_rag_shim.py stubs the chromadb/lancedb subtree outright
+#      (STUB_ROOTS), and README.md documents it as unused here.
+#
+# Note on IDs: the June 2026 advisories carry only GHSA/CVE identifiers, no
+# PYSEC alias, so they are keyed by GHSA — which is also the form Scorecard
+# prints. Keying the May one by its PYSEC alias is kept as-is; osv-scanner
+# matches aliases, and that entry is already proven to suppress.
+#
+# Recheck trigger for all four: a chromadb release that fixes any of them, or
+# a crewai release that widens the chromadb pin. Drop entries individually as
+# they clear — do not renew this block wholesale.
+
 [[IgnoredVulns]]
 id = "PYSEC-2026-311"
 ignoreUntil = 2026-10-23
 reason = """
 chromadb pre-authentication code injection (aliases CVE-2026-45829,
-GHSA-f4j7-r4q5-qw2c). No fixed release exists: the advisory's last_affected is
-1.5.9, which is also the latest chromadb on PyPI. Unreachable here regardless —
-crewai pins chromadb~=1.1.0, so no bump can clear it, and a CrewAI Flow never
-constructs a Chroma client. _musl_rag_shim.py stubs the chromadb/lancedb subtree
-outright, and README.md documents it as unused by this example. Re-check on the
-ignoreUntil date; drop this entry as soon as chromadb ships a fix and crewai
-widens its pin.
+GHSA-f4j7-r4q5-qw2c). Affected through 1.5.9 = latest; no fix to move to. See
+the shared chromadb rationale above for the pin and reachability argument.
+"""
+
+[[IgnoredVulns]]
+id = "GHSA-36p7-vc44-83pf"
+ignoreUntil = 2026-10-23
+reason = """
+chromadb code injection (alias CVE-2026-45833), published 2026-06-12. Critical
+severity, and still unfixed: affected through 1.5.9 = latest on PyPI. Requires
+reaching a Chroma client, which this example never constructs — see the shared
+chromadb rationale above.
+"""
+
+[[IgnoredVulns]]
+id = "GHSA-2wm9-hf6c-p5cr"
+ignoreUntil = 2026-10-23
+reason = """
+chromadb multi-tenancy failure (alias CVE-2026-45830), published 2026-06-12:
+any authenticated user can read, write, update or delete data in any tenant's
+collection. Affected through 1.5.9 = latest; no fix to move to. Needs a running
+Chroma server with more than one tenant to mean anything; this example runs no
+Chroma at all — see the shared chromadb rationale above.
+"""
+
+[[IgnoredVulns]]
+id = "GHSA-xph7-9rjv-w5fr"
+ignoreUntil = 2026-10-23
+reason = """
+chromadb SimpleRBACAuthorizationProvider does not check which tenant, database
+or collection a permission applies to (alias CVE-2026-45831), published
+2026-06-12. Affected from 0.5.0 through 1.5.9 = latest; no fix to move to.
+Scoped to Chroma's own authz provider, which this example never configures or
+starts — see the shared chromadb rationale above.
 """
