@@ -341,6 +341,20 @@ ignoreUntil date.
 """
 
 
+[[IgnoredVulns]]
+id = "GHSA-xrqw-3rrv-vx5w"
+ignoreUntil = 2026-11-16
+reason = """
+transformers 4.51.3 in the LLM Guard closure. Not bumpable: llm-guard
+0.3.16 pins transformers==4.51.3 exactly, so any other version is a different
+tool than the one under test. Arbitrary file write via a chat template name
+passed to save_pretrained — the arena never writes a model: the adapter builds
+PromptInjection and Secrets, runs scan_prompt over a fixed corpus of shell
+strings, and reaches no save_pretrained or push_to_hub path. Patched in
+transformers 5.10.0, a major bump llm-guard 0.3.16 does not accept. Clears
+when llm-guard bumps its transformers pin; re-check on the ignoreUntil date.
+"""
+
 # ── json-repair ─────────────────────────────────────────────────────
 [[IgnoredVulns]]
 id = "GHSA-xf7x-x43h-rpqh"
@@ -353,3 +367,29 @@ command strings. Clears when llm-guard bumps its pin; re-check on the
 ignoreUntil date.
 """
 
+# ── nltk ────────────────────────────────────────────────────────────
+[[IgnoredVulns]]
+id = "GHSA-8mgp-746c-j5xp"
+ignoreUntil = 2026-11-16
+reason = """
+nltk 3.10.3 in the LLM Guard closure. NO patched version exists: the advisory
+covers <= 3.10.3 and upstream has shipped no fix, so unlike the entries above
+this is not "won't bump" but "nothing to bump to". llm-guard 0.3.16 declares
+nltk>=3.9.1,<4 — a range, not an exact pin — so the resolved 3.10.3 is simply
+the newest 3.x.
+
+Not reached in the arena's configuration. The advisory concerns nltk's
+model-artifact APIs (nltk.download and friends) touching files outside their
+allowed root. llm-guard calls nltk.download in exactly two places: the
+Sentiment scanner, which the adapter never instantiates, and
+util.split_text_by_sentences, which PromptInjection reaches ONLY under
+MatchType.SENTENCE. arena/adapters/llm_guard_adapter.py pins
+match_type=MatchType.FULL, whose branch returns [prompt] and never tokenizes.
+The Secrets scanner uses detect-secrets and presidio-anonymizer and touches no
+nltk path.
+
+NOTE: this rationale is CONFIGURATION-dependent, not structural. Switching the
+adapter to MatchType.SENTENCE, or adding Sentiment, Gibberish, Language or
+Toxicity to its scanner list, makes nltk.download reachable and invalidates
+this suppression. Re-check if the adapter's scanner set changes.
+"""
