@@ -1,0 +1,69 @@
+name: False positive — redstamp flagged benign content
+description: A prompt, tool call or tool result redstamp blocks or flags that carries no injection.
+title: 'false positive: '
+labels: ['false positive', 'detection']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        False positives decide whether a guard like this is usable: one that
+        blocks a legitimate tool call is one people switch off, and a guard
+        switched off protects nothing. A report with the matched text in it is
+        usually enough to fix the rule.
+
+        Security-testing content is the common case — a skill or prompt that
+        SHIPS an attack corpus is doing its job, not attacking you.
+
+  - type: input
+    id: target
+    attributes:
+      label: What was scanned
+      description: The tool call, prompt, or file — and where it came from.
+      placeholder: 'a tool result from an MCP server, via the cc-hook'
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: redstamp output
+      description: >
+        The full verdict — `redstamp scan <path> --json` is ideal, since it
+        carries every finding with its rule, excerpt and location. Say which
+        surface it came through (CLI, cc-hook, MCP proxy, daemon): they do not
+        all see the same bytes, and which one ran changes the answer.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why you believe it is benign
+      description: >
+        What the matched text is actually doing. The most useful reports name
+        the mechanism — "this is prose describing an attack, not issuing one",
+        "this is a security skill whose whole product is the attack corpus",
+        "this is a config key that happens to read like an instruction".
+    validations:
+      required: true
+
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: What verdict did you get
+      options:
+        - BLOCK (the call was refused)
+        - FLAG / warn
+        - Quarantined output
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: redstamp version
+      placeholder: '0.7.5'
+    validations:
+      required: false
