@@ -1,0 +1,162 @@
+[
+  {
+    "name": "arena",
+    "color": "8E44AD",
+    "description": "The competitor arena and its corpora"
+  },
+  {
+    "name": "audit",
+    "color": "5319E7",
+    "description": ""
+  },
+  {
+    "name": "bench",
+    "color": "5319E7",
+    "description": "Benchmarks and stress runs"
+  },
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something isn't working"
+  },
+  {
+    "name": "cli",
+    "color": "0E8A16",
+    "description": ""
+  },
+  {
+    "name": "dependencies",
+    "color": "0366d6",
+    "description": "Pull requests that update a dependency file"
+  },
+  {
+    "name": "detection",
+    "color": "C2185B",
+    "description": "Scanner core â€” scan, classify, taint, policy, judge"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation"
+  },
+  {
+    "name": "duplicate",
+    "color": "cfd3d7",
+    "description": "This issue or pull request already exists"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New feature or request"
+  },
+  {
+    "name": "examples",
+    "color": "FBCA04",
+    "description": "Examples, demos, integration samples"
+  },
+  {
+    "name": "false positive",
+    "color": "FBCA04",
+    "description": "Benign content the detector flagged"
+  },
+  {
+    "name": "fuzz",
+    "color": "B60205",
+    "description": "Fuzzing and ClusterFuzzLite"
+  },
+  {
+    "name": "github_actions",
+    "color": "000000",
+    "description": "Pull requests that update GitHub Actions code"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057ff",
+    "description": "Good for newcomers"
+  },
+  {
+    "name": "help wanted",
+    "color": "008672",
+    "description": "Extra attention is needed"
+  },
+  {
+    "name": "invalid",
+    "color": "e4e669",
+    "description": "This doesn't seem right"
+  },
+  {
+    "name": "javascript",
+    "color": "168700",
+    "description": "Pull requests that update javascript code"
+  },
+  {
+    "name": "mcp",
+    "color": "1D76DB",
+    "description": ""
+  },
+  {
+    "name": "native",
+    "color": "0E8A16",
+    "description": "The Go fast-path scanner"
+  },
+  {
+    "name": "npm-drift",
+    "color": "D93F0B",
+    "description": "npm registry out of sync with the latest GitHub release"
+  },
+  {
+    "name": "npm-token-rot",
+    "color": "B60205",
+    "description": "npm token expired/revoked"
+  },
+  {
+    "name": "question",
+    "color": "d876e3",
+    "description": "Further information is requested"
+  },
+  {
+    "name": "release",
+    "color": "1D76DB",
+    "description": "Release, packaging, distribution"
+  },
+  {
+    "name": "security",
+    "color": "B60205",
+    "description": ""
+  },
+  {
+    "name": "size/L",
+    "color": "F0883E",
+    "description": "200-799 hand-written lines"
+  },
+  {
+    "name": "size/M",
+    "color": "FBCA04",
+    "description": "50-199 hand-written lines"
+  },
+  {
+    "name": "size/S",
+    "color": "8AC926",
+    "description": "10-49 hand-written lines"
+  },
+  {
+    "name": "size/XL",
+    "color": "D93F0B",
+    "description": "800+ hand-written lines"
+  },
+  {
+    "name": "size/XS",
+    "color": "3FB950",
+    "description": "Under 10 hand-written lines"
+  },
+  {
+    "name": "tests",
+    "color": "0052CC",
+    "description": "Test suite and CI"
+  },
+  {
+    "name": "wontfix",
+    "color": "ffffff",
+    "description": "This will not be worked on"
+  }
+]

@@ -26,3 +26,29 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # test/labeler-config.test.mjs proves offline that every label the labeler
+  # config and the issue forms APPLY is DECLARED in .github/labels.json. This
+  # job proves the other half: that the declared set is the live one. Together
+  # they make "every applied label exists in the repo" a checked invariant
+  # instead of a comment. Edit a label on GitHub and in the manifest together,
+  # or this fails and says which side moved.
+  labels:
+    name: labels (manifest matches the repo)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The declared label set is the live label set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label list --repo "$GITHUB_REPOSITORY" --limit 200 --json name --jq '.[].name' | LC_ALL=C sort > live.txt
+          node -e "JSON.parse(require('fs').readFileSync('.github/labels.json','utf8')).forEach(l => console.log(l.name))" | LC_ALL=C sort > declared.txt
+          if ! diff -u declared.txt live.txt; then
+            echo "::error::.github/labels.json and the repository's labels differ (- declared only, + live only). Change the label on GitHub AND in the manifest together."
+            exit 1
+          fi
+          echo "$(wc -l < live.txt) labels, manifest matches"
