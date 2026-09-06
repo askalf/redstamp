@@ -10,15 +10,13 @@ Same call → same verdict, every time. No model in the decision path. Zero runt
 [![ci](https://github.com/askalf/redstamp/actions/workflows/ci.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/askalf/redstamp/actions/workflows/codeql.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askalf/redstamp/badge)](https://scorecard.dev/viewer/?uri=github.com/askalf/redstamp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14489/badge)](https://www.bestpractices.dev/projects/14489)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
 [![signed release](https://img.shields.io/badge/release-sigstore_signed-brightgreen?logo=github)](https://github.com/askalf/redstamp/releases/latest)
 [![threat model](https://img.shields.io/badge/threat_model-SECURITY.md-informational)](SECURITY.md)
 <!-- redstamp on Glama — uncomment once the server is indexed in the directory (submit at https://glama.ai/mcp/servers; glama.json is already in place):
 [![redstamp on Glama](https://glama.ai/mcp/servers/askalf/redstamp/badges/card.svg)](https://glama.ai/mcp/servers/askalf/redstamp)
--->
-<!-- OpenSSF Best Practices — uncomment once enrolled at https://www.bestpractices.dev and replace PROJECT_ID:
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
 -->
 
 [Quick start](#quick-start) · [Scoreboard](#the-scoreboard) · [How it decides](#how-it-decides) · [Surfaces](#every-surface-an-agent-uses) · [Integrating](INTEGRATING.md) · [Threat model](SECURITY.md)
