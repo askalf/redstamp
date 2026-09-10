@@ -1,0 +1,39 @@
+name: arena llm-guard lockfile refresh
+
+# One-shot helper. arena/requirements-llm-guard.txt must be recompiled on the
+# arena's Linux target platform, so it cannot be regenerated on a Windows
+# checkout. Dispatch this to produce a fresh hash-locked lockfile from
+# requirements-llm-guard.in and download it as an artifact for review before
+# committing.
+on:
+  push:
+    branches: [fix/arena-cryptography-49]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recompile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install uv
+        run: python -m pip install --quiet uv
+      - name: Recompile llm-guard lockfile (Linux target)
+        working-directory: arena
+        run: |
+          uv pip compile requirements-llm-guard.in \
+            --python-version 3.11 --python-platform x86_64-unknown-linux-gnu \
+            --generate-hashes --no-annotate --no-header \
+            -o requirements-llm-guard.txt
+      - name: Show resolved cryptography pin
+        working-directory: arena
+        run: grep -m1 -A1 '^cryptography==' requirements-llm-guard.txt || echo "cryptography not in tree"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: requirements-llm-guard
+          path: arena/requirements-llm-guard.txt

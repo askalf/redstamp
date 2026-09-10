@@ -13,3 +13,11 @@
 # Bumping the version here means re-running that command and committing the
 # regenerated .txt — the workflow installs from the .txt, never from this file.
 llm-guard==0.3.16
+
+# Security floor: GHSA-jwv3-5hgf-82ww — cryptography < 49 allows duplicate
+# self-signed intermediates to cause exponential cert-path building (DoS).
+# cryptography is transitive via llm-guard; this floor forces the recompile off
+# the vulnerable 44.x line. If the resolver cannot satisfy it against
+# llm-guard==0.3.16, the bump is infeasible without moving the benchmarked
+# version and the advisory should be accepted/dismissed instead.
+cryptography>=49.0.0
