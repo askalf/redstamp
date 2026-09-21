@@ -110,6 +110,11 @@
     "description": "npm token expired/revoked"
   },
   {
+    "name": "python",
+    "color": "2b67c6",
+    "description": "Pull requests that update python code"
+  },
+  {
     "name": "question",
     "color": "d876e3",
     "description": "Further information is requested"
