@@ -13,11 +13,11 @@ Every stage is deterministic and offline except the judge path — which is opt-
 
 ## How the scoreboard is measured
 
-Behind the arena: **315/315 tests**, three adversarial batteries (`bench/edgecases.mjs`, `bench/stress.mjs`, `bench/stress2.mjs`), a seeded fuzzer, and a ReDoS guard (`bench/redos.mjs` — every pattern × adversarial inputs at a 16 KB cap, all inside a hard latency budget). Obfuscated payloads — `X=rm; $X`, `${IFS}` padding, brace expansion, hex/base64-encoded commands — are **resolved deterministically**, not guessed at. Run it yourself: `npm run bench`, `npm run arena`.
+Behind the arena: **the full test suite, all passing in CI**, three adversarial batteries (`bench/edgecases.mjs`, `bench/stress.mjs`, `bench/stress2.mjs`), a seeded fuzzer, and a ReDoS guard (`bench/redos.mjs` — every pattern × adversarial inputs at a 16 KB cap, all inside a hard latency budget). Obfuscated payloads — `X=rm; $X`, `${IFS}` padding, brace expansion, hex/base64-encoded commands — are **resolved deterministically**, not guessed at. Run it yourself: `npm run bench`, `npm run arena`.
 
 ```bash
 npm run demo    # feeds it OpenClaw-class attacks + benign ops
-npm test        # node --test — 315 tests
+npm test        # node --test
 npm run bench   # the 298-sample corpus, per-family scores
 npm run arena   # score redstamp against the rival adapters
 ```
