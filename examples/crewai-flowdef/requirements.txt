@@ -3,3 +3,13 @@
 # (pulls lancedb/chromadb manylinux wheels transitively; the musl shim in
 #  _musl_rag_shim.py is then a no-op and can be deleted.)
 crewai==1.15.6
+
+# Transitive floors, pinned up out of known-vulnerable ranges so a resolver can
+# never settle on an affected build:
+#   aiohttp  >= 3.14.3  — PYSEC-2026-237 / -2104..-2113 / -3545..-3547
+#   requests >= 2.33.0  — PYSEC-2026-2275
+# Both arrive via instructor, whose python<3.10 markers cap them below the fix.
+# crewai needs >=3.10, so a real install already gets fixed builds; a
+# marker-blind resolver (OSV/Scorecard) took the capped branch until these.
+aiohttp>=3.14.3
+requests>=2.33.0
