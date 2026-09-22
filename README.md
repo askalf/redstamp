@@ -141,7 +141,7 @@ More wiring recipes: [INTEGRATING.md](INTEGRATING.md).
 
 ## The agent-security stack
 
-Three composable layers, one defense — **redstamp contains the call** *(you are here)* · **[truecopy](https://github.com/askalf/truecopy)** vets the tool · **[strongroom](https://github.com/askalf/strongroom)** holds the keys. Run all three together: **[agent-security-stack](https://github.com/askalf/agent-security-stack)**.
+Three composable layers, one defense — **redstamp contains the call** *(you are here)* · **[truecopy](https://github.com/askalf/truecopy)** vets the tool · **[plumbline](https://github.com/askalf/plumbline)** watches the whole trajectory.
 
 **Related:** **[plumbline](https://github.com/askalf/plumbline)** — own your agent trajectory: out-of-band, read-only monitoring of the whole action sequence against the declared job. It sits *above* the three in-path layers and never blocks an action; it catches escapes assembled from individually-authorized steps.
 
@@ -151,4 +151,4 @@ The highest-value contributions are **adversarial**: corpus samples that break t
 
 ---
 
-Part of **[Own Your Agent Security](https://github.com/askalf/agent-security-stack)** — own your AI infrastructure instead of renting it by the token. Built by Thomas Sprayberry · MIT.
+Part of **[Own Your Agent Security](https://ownyourstack.sprayberrylabs.com)** — own your AI infrastructure instead of renting it by the token. Built by Thomas Sprayberry · MIT.
