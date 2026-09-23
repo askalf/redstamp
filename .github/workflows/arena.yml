@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: arena-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PIPELOCK_VERSION: 3.0.0
   PIPELOCK_SHA256: 3a9ceb11ab42f5a65bf0c440f01f5ee44e073663dd6a757d720c4a566b85c120
@@ -34,6 +38,7 @@ env:
 jobs:
   arena:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -44,6 +49,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: arena/requirements-llm-guard.txt
 
       - name: Install mcp-firewall deps (hash-pinned)
         # Its runtime deps, resolved once from the pinned commit's pyproject and
