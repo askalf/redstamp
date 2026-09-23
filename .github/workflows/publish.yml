@@ -39,6 +39,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write # OIDC trusted-publisher auth for npm publish
