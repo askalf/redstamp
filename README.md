@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src=".github/readme/hero.jpg" alt="redstamp: A deterministic, offline firewall for AI agent tool calls. ALF, a friendly violet alien, holds a glowing red stamp beside four tool calls stamped allow, allow, approve and block." width="100%">
+
 # redstamp
 
 **A deterministic, offline firewall for AI agent tool calls.**
