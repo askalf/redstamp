@@ -44,6 +44,7 @@ Every public entry point (`@askalf/redstamp` plus `/mcp`, `/judge`, `/wrap`,
 types. No runtime change. `test/types.test.mjs` fails the build if a runtime
 export has no declaration, or a declaration has no runtime export. The
 `/daemon` declarations reference `node:net`, so they need `@types/node`.
+The declarations need TypeScript 5.0 or later.
 
 ### Added: the arena scores against outside corpora (#132, #134)
 

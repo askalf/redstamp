@@ -31,11 +31,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # test/types.test.mjs checks export NAMES only. This compiles the declarations,
-      # so a wrong signature or a syntax error fails a required check. The compiler is
-      # installed outside the repo at pinned versions, so redstamp keeps zero
-      # dependencies. One leg is enough: the declarations are the same files on every
-      # OS and Node version.
       - name: Type-check the declarations
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         run: |
