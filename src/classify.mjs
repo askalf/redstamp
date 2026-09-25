@@ -769,7 +769,11 @@ function collectEgress(cmd, depth, out) {
             continue;
           }
           // `-o out`, and a short cluster ending in a value flag (`-sSLo out`).
-          const last = /^-[A-Za-z]{2,}$/.test(arg) ? '-' + arg.slice(-1) : arg;
+          // A cluster that opens with a value flag is that flag plus an attached value
+          // (`-XPOST` is `-X POST`), so its "last letter" is not a flag and nothing follows.
+          const short = /^-[A-Za-z]{2,}$/.test(arg);
+          const last = short ? '-' + arg.slice(-1) : arg;
+          if (short && client.values.has('-' + arg[1])) continue;   // attached value, nothing to skip
           if (client.values.has(arg) || client.values.has(last)) a++;
           continue;
         }
