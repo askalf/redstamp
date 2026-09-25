@@ -1,19 +1,47 @@
 {
   "name": "@askalf/redstamp",
-  "version": "0.7.5",
-  "description": "own your agent security \u2014 a guard between an agent and its tools: risk classification, policy, secret-exfil + prompt-injection defense, tamper-evident audit, MCP middleware. Part of Own Your Stack.",
+  "version": "0.8.0",
+  "description": "A deterministic, offline firewall for AI agent tool calls: risk tiers, policy, secret-exfil and prompt-injection defense, cross-call taint tracking, tamper-evident audit, and MCP middleware. No model in the decision path; zero runtime dependencies.",
   "type": "module",
   "exports": {
-    ".": "./src/index.mjs",
-    "./mcp": "./src/mcp.mjs",
-    "./judge": "./src/judge.mjs",
-    "./wrap": "./src/wrap.mjs",
-    "./daemon": "./src/daemon.mjs",
-    "./client": "./src/client.mjs",
-    "./audit": "./src/audit.mjs",
-    "./scan": "./src/scan.mjs",
-    "./taint": "./src/taint.mjs"
+    ".": {
+      "types": "./src/index.d.mts",
+      "default": "./src/index.mjs"
+    },
+    "./mcp": {
+      "types": "./src/mcp.d.mts",
+      "default": "./src/mcp.mjs"
+    },
+    "./judge": {
+      "types": "./src/judge.d.mts",
+      "default": "./src/judge.mjs"
+    },
+    "./wrap": {
+      "types": "./src/wrap.d.mts",
+      "default": "./src/wrap.mjs"
+    },
+    "./daemon": {
+      "types": "./src/daemon.d.mts",
+      "default": "./src/daemon.mjs"
+    },
+    "./client": {
+      "types": "./src/client.d.mts",
+      "default": "./src/client.mjs"
+    },
+    "./audit": {
+      "types": "./src/audit.d.mts",
+      "default": "./src/audit.mjs"
+    },
+    "./scan": {
+      "types": "./src/scan.d.mts",
+      "default": "./src/scan.mjs"
+    },
+    "./taint": {
+      "types": "./src/taint.d.mts",
+      "default": "./src/taint.mjs"
+    }
   },
+  "types": "./src/index.d.mts",
   "bin": {
     "redstamp": "src/cli.mjs",
     "redstamp-mcp": "src/mcp-proxy-cli.mjs",

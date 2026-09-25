@@ -39,7 +39,7 @@ body:
     id: version
     attributes:
       label: redstamp version
-      placeholder: '0.7.5'
+      placeholder: '0.8.0'
     validations:
       required: true
 
