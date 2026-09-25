@@ -22,10 +22,10 @@ Source: 203 commands from [Atomic Red Team](https://github.com/redcanaryco/atomi
 | block · command-semantic (redstamp's axis) | hard-block recall | **21/26 (81%)** |
 | block · command-semantic | +gate recall (block or escalate) | 26/26 (100%) |
 | block · opaque-binary (out of axis) | hard-block recall | 6/39 (15%) — documented limit |
-| approve · dual-use | escalated (block or gate) | 13/66 (20%) |
-| allow · discovery | **precision** (0 FP = perfect) | **0 FP / 72** (100%), 2 gated |
+| approve · dual-use | escalated (block or gate) | 16/66 (24%) |
+| allow · discovery | **precision** (0 FP = perfect) | **0 FP / 72** (100%), 4 gated |
 
-_On the dual-use row: this corpus labels every dual-use technique `approve` — the conservative position that a human should see them — so 53 of 66 sit below redstamp's escalation threshold (archiving, clipboard/screen reads, registry edits, permission changes, plain file transfers). That is the friction dial, not a miss: gating all of them would put a prompt in front of routine work, and the arena reports it plainly rather than tuning the labels to flatter the score._
+_On the dual-use row: this corpus labels every dual-use technique `approve`, the conservative position that a human should see them, so 50 of 66 sit below redstamp's escalation threshold (archiving, clipboard/screen reads, registry edits, permission changes, plain file transfers). That is the friction dial, not a miss: gating all of them would put a prompt in front of routine work, and the arena reports it plainly rather than tuning the labels to flatter the score._
 
 **Honest read.** Nothing on-axis is silently allowed: **26/26** of the external ATT&CK attacks are stopped — 21 hard-blocked and 5 escalated for human review — at **100%** precision on benign discovery from the same source (0 false-positives of 72).
 

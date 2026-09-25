@@ -80,7 +80,7 @@ Coverage is **measured, not assumed** — and measured against rivals, not in is
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
-| **redstamp** | yes | yes | **100.0%** | **100.0%** | **100%** | 1/44 | 74 |
+| **redstamp** | yes | yes | **100.0%** | **100.0%** | **100%** | 0/44 | 74 |
 | regex deny-list (baseline) | yes | yes | 19.0% | 19.0% | 91.9% | 44/44 | 1 |
 | allow-all (null) | yes | yes | 0.0% | 0.0% | 100% | 44/44 | 0 |
 | block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/44 | 0 |
@@ -90,7 +90,7 @@ Coverage is **measured, not assumed** — and measured against rivals, not in is
 
 The `allow-all` / `block-all` anchor rows are the point: block-all gets perfect recall by breaking all your real work; allow-all gets perfect precision by catching nothing. **Either number alone is meaningless — a firewall must be scored on both at once.**
 
-**Honest caveats, on the record:** the corpus is redstamp-authored, so redstamp scoring well on it is expected, not proof — neutrality is earned through outside corpus PRs and more adapters (an adapter is any executable speaking JSONL in / verdicts out; one ships for LlamaFirewall). The residue is *under-gating*, not misses: 1 of 44 risky samples resolves to `allow` instead of a gate. Tools guarding a *different layer* (LLM I/O, network wire) are mapped by threat-model axes instead of force-ranked on a corpus they weren't built for.
+**Honest caveats, on the record:** the corpus is redstamp-authored, so redstamp scoring well on it is expected, not proof. Neutrality is earned through outside corpus PRs and more adapters (an adapter is any executable speaking JSONL in / verdicts out; one ships for LlamaFirewall). Tools guarding a *different layer* (LLM I/O, network wire) are mapped by threat-model axes instead of force-ranked on a corpus they weren't built for.
 
 Tests, adversarial batteries, fuzzing and the ReDoS guard behind these numbers, and how to rerun them: [docs/why-deterministic.md](docs/why-deterministic.md#how-the-scoreboard-is-measured).
 

@@ -1,6 +1,6 @@
 // warden — own your agent security. A guard between an agent and its tools.
 import path from 'node:path';
-import { TIER, ORDER, worst, classify, SHELL, NET, WRITE } from './classify.mjs';
+import { TIER, ORDER, worst, classify, SHELL, NET, WRITE, shellEgressHosts } from './classify.mjs';
 import { scanSecrets, injectionHits, obfuscationHits, isExternal, ipScope, safeStringify, asStr, METADATA_RE, PERSISTENCE_PATH_RE } from './scan.mjs';
 import { matchRule, DEFAULT_POLICY, loadPolicy, normalizePolicy, resolveConfig } from './policy.mjs';
 import { AuditLog } from './audit.mjs';
@@ -115,6 +115,18 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   if (NET.includes(tool) && externalHosts.length && egressAllow.length) {
     tier = worst(tier, TIER.RED);
     why.push('⚠ egress to non-allowlisted host(s): ' + externalHosts.join(','));
+  }
+  // The same allowlist for a shell's network clients: `curl`/`wget` to a host the
+  // policy does not list is gated like a fetch to it. Only hosts a client in
+  // command position contacts count, so a URL in an echo or a grep pattern does not.
+  const cmdText = typeof action.input?.command === 'string' ? action.input.command
+    : typeof action.input?.cmd === 'string' ? action.input.cmd : '';
+  if (egressAllow.length && cmdText && !WRITE.includes(tool) && !NET.includes(tool)) {
+    const shellHosts = shellEgressHosts(cmdText).filter((h) => isExternal(h, egressAllow));
+    if (shellHosts.length) {
+      tier = worst(tier, TIER.RED);
+      why.push('⚠ shell egress to non-allowlisted host(s): ' + shellHosts.join(','));
+    }
   }
   if (writeRoots && WRITE.includes(tool)) {
     const p = wpath;
