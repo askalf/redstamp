@@ -640,14 +640,15 @@ export function classify(action) {
 // but contacts nothing. A single linear walk over bounded input.
 //
 // Per client: which flags take the NEXT token as their value (so it is never read
-// as the destination), and which positionals are destinations. The same letter
+// as the destination), which flags name a host the client connects to (`--url`,
+// a proxy), and which positionals are destinations. The same letter
 // differs between clients (curl -O takes no value, wget -O names the output file),
 // so each client has its own list.
 const flagSet = (s) => new Set(s.split(' '));
 const CLIENTS = {
-  curl: { dests: 'all', values: flagSet('-o --output -H --header -d --data --data-raw --data-binary --data-urlencode --data-ascii --json -X --request -u --user -A --user-agent -e --referer -T --upload-file -F --form --form-string -b --cookie -c --cookie-jar -x --proxy -U --proxy-user -m --max-time --connect-timeout -w --write-out -K --config -E --cert --key --cacert --capath -r --range -C --continue-at --retry --retry-delay --retry-max-time --resolve --connect-to -z --time-cond -D --dump-header -P --ftp-port -Q --quote -t --telnet-option --interface --local-port --limit-rate -y --speed-time -Y --speed-limit --max-filesize --oauth2-bearer --unix-socket --abstract-unix-socket --proto --proto-redir --noproxy') },
+  curl: { dests: 'all', values: flagSet('-o --output -H --header -d --data --data-raw --data-binary --data-urlencode --data-ascii --json -X --request -u --user -A --user-agent -e --referer -T --upload-file -F --form --form-string -b --cookie -c --cookie-jar -U --proxy-user -m --max-time --connect-timeout -w --write-out -K --config -E --cert --key --cacert --capath -r --range -C --continue-at --retry --retry-delay --retry-max-time --resolve --connect-to -z --time-cond -D --dump-header -P --ftp-port -Q --quote -t --telnet-option --interface --local-port --limit-rate -y --speed-time -Y --speed-limit --max-filesize --oauth2-bearer --unix-socket --abstract-unix-socket --proto --proto-redir --noproxy'), destFlags: flagSet('--url -x --proxy --preproxy') },
   wget: { dests: 'all', values: flagSet('-O --output-document -o --output-file -a --append-output -P --directory-prefix -U --user-agent --header --post-data --post-file --body-data --body-file --method -e --execute -t --tries -T --timeout -w --wait --user --password --http-user --http-password -i --input-file -Q --quota -X --exclude-directories -I --include-directories -A --accept -R --reject -D --domains -l --level --limit-rate --load-cookies --save-cookies --ca-certificate --certificate --private-key -B --base --bind-address') },
-  http: { dests: 'first', values: flagSet('-a --auth -A --auth-type -o --output --session --session-read-only --verify --cert --cert-key --proxy --timeout --pretty -s --style -p --print --format-options --max-redirects --ssl --ciphers --boundary') },
+  http: { dests: 'first', values: flagSet('-a --auth -A --auth-type -o --output --session --session-read-only --verify --cert --cert-key --timeout --pretty -s --style -p --print --format-options --max-redirects --ssl --ciphers --boundary'), destFlags: flagSet('--proxy') },
 };
 CLIENTS.https = CLIENTS.http;
 CLIENTS.xh = CLIENTS.http;
@@ -758,6 +759,15 @@ function collectEgress(cmd, depth, out) {
       for (let a = 0; a < args.length; a++) {
         const arg = args[a];
         if (arg.startsWith('-')) {
+          // `--url=https://x` or `--url https://x`: the value is a destination.
+          const eq = arg.startsWith('--') ? arg.indexOf('=') : -1;
+          const flag = eq > 0 ? arg.slice(0, eq) : arg;
+          if (client.destFlags?.has(flag)) {
+            const value = eq > 0 ? arg.slice(eq + 1) : args[++a];
+            const h = value ? destHostOf(value.replace(/^[a-z]+:(?!\/\/)/i, '')) : null;   // httpie: `http:http://proxy`
+            if (h) out.push(h);
+            continue;
+          }
           // `-o out`, and a short cluster ending in a value flag (`-sSLo out`).
           const last = /^-[A-Za-z]{2,}$/.test(arg) ? '-' + arg.slice(-1) : arg;
           if (client.values.has(arg) || client.values.has(last)) a++;
