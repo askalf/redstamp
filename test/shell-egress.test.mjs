@@ -1,7 +1,3 @@
-// The egress allowlist applies to a shell's network clients, not only to
-// fetch-shaped tools. Before this, `fetch https://evil.example` was gated while
-// `wget https://evil.example` in a shell was allowed, so any agent with a shell
-// could reach a host the policy did not list (arena under-gate: 1/44).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { decide } from '../src/index.mjs';
