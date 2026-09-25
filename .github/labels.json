@@ -10,6 +10,11 @@
     "description": ""
   },
   {
+    "name": "author-fixes",
+    "color": "BFD4F2",
+    "description": "The PR's author answers its reviews; no fleet fix ticket"
+  },
+  {
     "name": "bench",
     "color": "5319E7",
     "description": "Benchmarks and stress runs"
