@@ -2,6 +2,79 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-25
+
+A minor bump, not a patch: #133 turns calls that 0.7.5 allowed into gates and
+blocks, so an upgrade can change verdicts on real traffic. Every one of those
+calls is a documented attack technique, and each rule ships with a paired
+false-positive guard.
+
+### Fixed: 18 attacks that 0.7.5 silently allowed (#133)
+
+Scoring against an outside corpus (Atomic Red Team, organized by MITRE ATT&CK)
+found on-axis attacks that got through while the in-repo corpus read 100%.
+
+- **New black-tier coverage:** inhibiting recovery beyond `vssadmin` (`wbadmin`
+  catalog deletion, shadow-copy deletion through WMI/CIM); USN change-journal
+  deletion; `dd` overwriting a system file in place; encrypting a system
+  credential file (the ransomware shape, including copy-then-encrypt and tools
+  called through a variable); archiving a system or credential tree out over
+  `ssh`; data encoded into DNS queries; the `/proc/1/ns/` spelling of an
+  `nsenter` host escape.
+- **New red-tier coverage:** cloud-resource deletion outside AWS, privileged or
+  host-namespace pods, credential-store enumeration, and reading a file then
+  POSTing its contents outward. Red rules gained gate-callback support for this.
+- **Why each rule has an FP guard:** the first cut matched `tar` and `ssh`
+  anywhere and hard-blocked a routine `scp -i ~/.ssh/deploy_key dist.tar host:/srv/`.
+  Command position is load-bearing. The rules are a cheap anchor plus a gate
+  callback, not multi-lookahead regexes, which kept the ReDoS worst case at
+  0.88ms (the first version hit 45ms on a 16KB input).
+
+External on-axis recall went from 13/31 prevented to 26/26 prevented, with
+nothing silently allowed. Precision is unchanged: zero hard false positives on
+1,212 tldr-pages commands and 72 Atomic discovery commands, and the in-repo
+corpus holds at 100% recall and 100% precision.
+
+### Added: TypeScript declarations
+
+Every public entry point (`@askalf/redstamp` plus `/mcp`, `/judge`, `/wrap`,
+`/daemon`, `/client`, `/audit`, `/scan`, `/taint`) now ships a hand-written
+`.d.mts` beside its source, wired through a `types` condition in `exports`.
+`Verdict`, `Action`, `Policy`, `Tier`, `Decision` and `Judge` are exported as
+types. No runtime change. `test/types.test.mjs` fails the build if a runtime
+export has no declaration, or a declaration has no runtime export. The
+`/daemon` declarations reference `node:net`, so they need `@types/node`.
+The declarations need TypeScript 5.0 or later.
+
+### Added: the arena scores against outside corpora (#132, #134)
+
+- Two vendored third-party corpora with provenance: **tldr-pages** (CC-BY-4.0,
+  benign precision) and **Atomic Red Team** (MIT, ATT&CK attacks plus benign
+  discovery). Every competitor is scored on both, since no participant wrote
+  either test set.
+- A framework coverage matrix (`arena/FRAMEWORKS.md`) maps each detection family
+  to OWASP LLM Top 10 (2025), OWASP Agentic Threats, MITRE ATT&CK, MITRE ATLAS
+  and NIST AI RMF, each claim carrying a measured recall number.
+- **LLM Guard** (Protect AI) joins the board as a partial-axis row. The reasons
+  other guardrails are not rows (Invariant, Guardrails AI, LlamaFirewall's
+  ungated scanners, Vigil) are recorded in the arena docs.
+
+### Changed
+
+- `package.json` `description` now matches the README headline.
+- `classify.mjs`: the 18 inline copies of the Windows flag/arg separator pattern
+  now reference the `FLAGSEP` / `ARGSEP` constants (#127). All 113 shell rules
+  were verified byte-identical before and after.
+- The arena's mcp-firewall lockfile moves to `cryptography` 50.0.0
+  (CVE-2026-69247) (#127). Arena-only; redstamp itself has no dependencies.
+- README reorganized to lead with the scoreboard; reference material moved to
+  `docs/` (#131, #153).
+
+### Note on distribution
+
+Unchanged from 0.7.4: this release ships as the git tag plus the signed GitHub
+release with Sigstore provenance. npm stays a pointer stub.
+
 ## [0.7.5] - 2026-08-04
 
 ### Fixed — the PowerShell `-ArgumentList` array form evaded the black gate (#124)
