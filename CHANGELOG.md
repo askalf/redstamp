@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+### Fixed: the egress allowlist did not apply to shell commands
+
+With `egressAllow` set, `fetch https://evil.example` was gated but
+`wget https://evil.example` in a shell was allowed. The same went for
+`curl -d @file https://…` uploads. Any agent with a shell could reach a host
+the policy did not list.
+
+The allowlist now applies to network clients in command position:
+`curl`, `wget`, `http`/`https`/`xh`, `aria2c`, git's network subcommands
+(`clone`, `fetch`, `pull`, `push`, `ls-remote`, `archive`, `submodule`), and
+`Invoke-WebRequest`/`iwr`/`Invoke-RestMethod`/`irm`, `Start-BitsTransfer`,
+`certutil` and `bitsadmin`. A call to a host outside the list is gated (red),
+the same as a fetch to it.
+
+- **What counts as a destination:** scheme'd URLs, and for curl, wget and
+  httpie also bare hosts (`curl evil.example/x`), `--url` in either spelling
+  (`--url=https://…`), and the proxy a client connects through (`curl -x`,
+  `--proxy`, `--preproxy`, httpie `--proxy`). Flag values are skipped per
+  client, since the same letter differs between them (`curl -O` takes no value,
+  `wget -O` names the output file).
+- **What does not:** a URL nothing contacts. `echo "see https://…"`, a grep
+  pattern, a commit message and single-quoted text stay allowed. Loopback and
+  private addresses are left to the SSRF rule, and allowlisted hosts and their
+  subdomains stay allowed.
+- **What it sees through:** `sudo`/`env`/`timeout` wrappers and their options
+  (`sudo -u root curl …`), `VAR=value` prefixes, shell keywords (`if curl …`,
+  `{ curl …; }`), `$( … )` and backticks (including inside double quotes),
+  `bash -c` / `powershell -Command` / `cmd /c` bodies, Windows paths
+  (`C:\tools\curl.exe`), backslash escapes (`cu\rl`), variable indirection and
+  brace expansion.
+- **Unchanged without an allowlist.** No `egressAllow`, no new verdicts.
+- **Not covered:** clients that take a host rather than a URL (`nc`, `ssh`,
+  `scp`, `rsync`), and a host that only appears at runtime (read from a file or
+  built by the command).
+
+Arena: under-gate goes from 1/44 to 0/44, and benign friction from 0 to 1. The
+benign `curl -O https://github.com/…; tar xzf x.tgz` sample is now gated,
+because the corpus policy does not list `github.com`; that is the allowlist
+doing its job, and the sample is left as is. Precision stays 100% (no benign
+sample is blocked), and none of the 1,212 tldr-pages commands trips the rule.
+On Atomic Red Team, dual-use escalation goes from 13/66 to 16/66, and two
+benign discovery commands (`curl -k https://ipinfo.io/`) are now gated, with
+hard false positives still 0/72.
+
 ## [0.8.0] - 2026-09-25
 
 A minor bump, not a patch: #133 turns calls that 0.7.5 allowed into gates and

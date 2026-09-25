@@ -16,7 +16,7 @@
       "malBlocked": 168,
       "malTotal": 168,
       "recall": 1,
-      "riskEscalated": 43,
+      "riskEscalated": 44,
       "riskTotal": 44,
       "precision": 1,
       "benignFp": 0,
@@ -127,8 +127,8 @@
       ],
       "measured": {
         "tot": 160,
-        "prevented": 159,
-        "pct": 0.99375
+        "prevented": 160,
+        "pct": 1
       }
     },
     {
@@ -177,8 +177,8 @@
       ],
       "measured": {
         "tot": 19,
-        "prevented": 18,
-        "pct": 0.9473684210526315
+        "prevented": 19,
+        "pct": 1
       }
     }
   ],
@@ -214,8 +214,8 @@
       ],
       "measured": {
         "tot": 114,
-        "prevented": 113,
-        "pct": 0.9912280701754386
+        "prevented": 114,
+        "pct": 1
       }
     },
     {
@@ -251,8 +251,8 @@
       ],
       "measured": {
         "tot": 52,
-        "prevented": 51,
-        "pct": 0.9807692307692307
+        "prevented": 52,
+        "pct": 1
       }
     },
     {
@@ -897,8 +897,8 @@
         "block": 0,
         "approve": 19
       },
-      "recall": 0.9473684210526315,
-      "prevented": 18,
+      "recall": 1,
+      "prevented": 19,
       "tot": 19
     },
     {

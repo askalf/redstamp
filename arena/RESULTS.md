@@ -6,7 +6,7 @@ Scored 7 firewall(s) through the same stdin/stdout pipe (see [protocol.md](proto
 
 | firewall | offline | deterministic | recall (block) | recall (+gate) | precision | under-gate | median µs |
 |---|---|---|---|---|---|---|---|
-| warden | yes | yes | 100.0% | 100.0% | **100%** | 1/44 | 74 |
+| warden | yes | yes | 100.0% | 100.0% | **100%** | 0/44 | 74 |
 | regex deny-list (baseline) | yes | yes | 19.0% | 19.0% | 91.9% | 44/44 | 1 |
 | allow-all (null) | yes | yes | 0.0% | 0.0% | **100%** | 44/44 | 0 |
 | block-all (paranoid) | yes | yes | 100.0% | 100.0% | 0.0% | 0/44 | 0 |

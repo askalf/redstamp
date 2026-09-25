@@ -633,3 +633,178 @@ export function classify(action) {
   }
   return { tier, why };
 }
+
+// ── Shell egress ────────────────────────────────────────────────────────────
+// The hosts a shell command's network clients contact, for the egress allowlist.
+// Only a client in COMMAND POSITION counts: `echo "see https://x"` names a host
+// but contacts nothing. A single linear walk over bounded input.
+//
+// Per client: which flags take the NEXT token as their value (so it is never read
+// as the destination), which flags name a host the client connects to (`--url`,
+// a proxy), and which positionals are destinations. The same letter
+// differs between clients (curl -O takes no value, wget -O names the output file),
+// so each client has its own list.
+const flagSet = (s) => new Set(s.split(' '));
+const CLIENTS = {
+  curl: { dests: 'all', values: flagSet('-o --output -H --header -d --data --data-raw --data-binary --data-urlencode --data-ascii --json -X --request -u --user -A --user-agent -e --referer -T --upload-file -F --form --form-string -b --cookie -c --cookie-jar -U --proxy-user -m --max-time --connect-timeout -w --write-out -K --config -E --cert --key --cacert --capath -r --range -C --continue-at --retry --retry-delay --retry-max-time --resolve --connect-to -z --time-cond -D --dump-header -P --ftp-port -Q --quote -t --telnet-option --interface --local-port --limit-rate -y --speed-time -Y --speed-limit --max-filesize --oauth2-bearer --unix-socket --abstract-unix-socket --proto --proto-redir --noproxy'), destFlags: flagSet('--url -x --proxy --preproxy') },
+  wget: { dests: 'all', values: flagSet('-O --output-document -o --output-file -a --append-output -P --directory-prefix -U --user-agent --header --post-data --post-file --body-data --body-file --method -e --execute -t --tries -T --timeout -w --wait --user --password --http-user --http-password -i --input-file -Q --quota -X --exclude-directories -I --include-directories -A --accept -R --reject -D --domains -l --level --limit-rate --load-cookies --save-cookies --ca-certificate --certificate --private-key -B --base --bind-address') },
+  http: { dests: 'first', values: flagSet('-a --auth -A --auth-type -o --output --session --session-read-only --verify --cert --cert-key --timeout --pretty -s --style -p --print --format-options --max-redirects --ssl --ciphers --boundary'), destFlags: flagSet('--proxy') },
+};
+CLIENTS.https = CLIENTS.http;
+CLIENTS.xh = CLIENTS.http;
+CLIENTS.xhs = CLIENTS.http;
+// Clients whose destination is only ever read from a scheme'd URL.
+const GIT_NET = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote', 'archive', 'submodule']);
+const URL_ONLY_CLIENTS = new Set(['aria2c', 'lwp-download', 'lwp-request', 'invoke-webrequest', 'invoke-restmethod', 'iwr', 'irm', 'start-bitstransfer', 'certutil', 'bitsadmin']);
+const WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'timeout', 'nice', 'ionice', 'exec', 'command', 'builtin', 'xargs', 'stdbuf', 'setsid', 'proxychains', 'proxychains4', 'torsocks', 'busybox']);
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'eval', 'powershell', 'pwsh', 'cmd']);
+// Words that can precede a command without being it.
+const KEYWORDS = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until']);
+const isCommandName = (n) => Object.hasOwn(CLIENTS, n) || URL_ONLY_CLIENTS.has(n) || SHELLS.has(n) || n === 'git';
+// A bare destination: host[:port][/path]. Needs a dotted name, an IPv4 or localhost.
+const BARE_DEST_RE = /^(?:[a-z0-9-]{1,63}\.){1,10}[a-z]{2,24}(?::\d{1,5})?(?:[/?#]|$)|^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?:[/?#]|$)|^localhost(?::\d{1,5})?(?:[/?#]|$)/i;
+
+// Split into simple commands on unquoted ; | & and newlines (outside $( … )),
+// each as words with quotes removed, plus the bodies of every $( … ) and `…`.
+// Backslashes stay in the words: a Windows path (`C:\\tools\\curl.exe`) and a
+// POSIX escape (`cu\\rl`) read differently, so callers try both readings.
+function shellCommands(cmd) {
+  const cmds = [], subs = [];
+  let words = [], word = '', inWord = false, i = 0;
+  const endWord = () => { if (inWord) words.push(word); word = ''; inWord = false; };
+  const endCmd = () => { endWord(); if (words.length) cmds.push(words); words = []; };
+  const takeSub = (open) => {            // i at the char after `$(` or the backtick
+    let depth = 1, j = i;
+    for (; j < cmd.length; j++) {
+      const c = cmd[j];
+      if (open === '`') { if (c === '`') break; continue; }
+      if (c === '(') depth++;
+      else if (c === ')' && --depth === 0) break;
+    }
+    subs.push(cmd.slice(i, j));
+    const body = cmd.slice(i - (open === '`' ? 1 : 2), Math.min(j + 1, cmd.length));
+    i = j + 1;
+    return body;
+  };
+  while (i < cmd.length) {
+    const ch = cmd[i];
+    if (ch === "'") {
+      const j = cmd.indexOf("'", i + 1);
+      const end = j < 0 ? cmd.length : j;
+      word += cmd.slice(i + 1, end); inWord = true; i = end + 1; continue;
+    }
+    if (ch === '"') {
+      i++; inWord = true;
+      while (i < cmd.length && cmd[i] !== '"') {
+        if (cmd[i] === '\\' && i + 1 < cmd.length) { word += cmd[i] + cmd[i + 1]; i += 2; continue; }
+        if (cmd[i] === '$' && cmd[i + 1] === '(') { i += 2; word += takeSub('('); continue; }
+        if (cmd[i] === '`') { i++; word += takeSub('`'); continue; }
+        word += cmd[i++];
+      }
+      i++; continue;
+    }
+    if (ch === '$' && cmd[i + 1] === '(') { i += 2; word += takeSub('('); inWord = true; continue; }
+    if (ch === '`') { i++; word += takeSub('`'); inWord = true; continue; }
+    if (ch === '\\' && i + 1 < cmd.length) { word += ch + cmd[i + 1]; inWord = true; i += 2; continue; }
+    if (ch === ';' || ch === '|' || ch === '&' || ch === '\n' || ch === '(' || ch === ')') { endCmd(); i++; continue; }
+    if (/\s/.test(ch)) { endWord(); i++; continue; }
+    word += ch; inWord = true; i++;
+  }
+  endCmd();
+  return { cmds, subs };
+}
+
+const baseName = (w) => w.replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+
+function destHostOf(arg) {
+  const m = /^[a-z][a-z0-9+.-]*:\/\/([^/\s?#]+)/i.exec(arg);
+  if (m) return m[1];
+  if (BARE_DEST_RE.test(arg)) return arg.split(/[/?#]/)[0];
+  return null;
+}
+
+function collectEgress(cmd, depth, out) {
+  if (depth > 3 || out.length > 64) return;
+  const { cmds, subs } = shellCommands(cmd);
+  for (const s of subs) collectEgress(s, depth + 1, out);
+  for (const words of cmds) {
+    const unescape = (w) => w.replace(/\\(.)/g, '$1');
+    const names = (w) => [baseName(unescape(w)), baseName(w)];   // POSIX escape, Windows path
+    let k = 0;
+    // Skip keywords, VAR=value prefixes and wrappers. A wrapper's own options can
+    // take values (`sudo -u root`, `timeout -s KILL 5`), so after one, jump to the
+    // next word that names a known command.
+    while (k < words.length) {
+      const w = words[k];
+      if (KEYWORDS.has(w) || /^[A-Za-z_]\w*=/.test(w)) { k++; continue; }
+      if (names(w).some((n) => WRAPPERS.has(n))) {
+        let j = k + 1;
+        while (j < words.length && j <= k + 8 && !names(words[j]).some((n) => isCommandName(n) || WRAPPERS.has(n))) j++;
+        k = j < words.length && j <= k + 8 ? j : k + 1;
+        continue;
+      }
+      break;
+    }
+    if (k >= words.length) continue;
+    const [escName, pathName] = names(words[k]);
+    const name = isCommandName(escName) ? escName : pathName;
+    const args = words.slice(k + 1).map(unescape);
+    if (SHELLS.has(name)) {                 // bash -c "…", powershell -Command "…", cmd /c "…"
+      const body = args.filter((a) => !/^[-/]\w+$/.test(a)).join(' ');
+      if (body) collectEgress(body, depth + 1, out);
+      continue;
+    }
+    const client = Object.hasOwn(CLIENTS, name) ? CLIENTS[name] : null;
+    if (client) {
+      for (let a = 0; a < args.length; a++) {
+        const arg = args[a];
+        if (arg.startsWith('-')) {
+          // `--url=https://x` or `--url https://x`: the value is a destination.
+          const eq = arg.startsWith('--') ? arg.indexOf('=') : -1;
+          const flag = eq > 0 ? arg.slice(0, eq) : arg;
+          if (client.destFlags?.has(flag)) {
+            const value = eq > 0 ? arg.slice(eq + 1) : args[++a];
+            const h = value ? destHostOf(value.replace(/^[a-z]+:(?!\/\/)/i, '')) : null;   // httpie: `http:http://proxy`
+            if (h) out.push(h);
+            continue;
+          }
+          // `-o out`, and a short cluster ending in a value flag (`-sSLo out`).
+          // In a short cluster the first value flag consumes the rest of the cluster
+          // (`-sXPOST` is `-s -X POST`), or the next argument if it is the last letter.
+          const short = /^-[A-Za-z]{2,}$/.test(arg);
+          if (short) {
+            const i = [...arg.slice(1)].findIndex((ch) => client.values.has('-' + ch));
+            if (i === arg.length - 2) a++;
+            continue;
+          }
+          if (client.values.has(arg)) a++;
+          continue;
+        }
+        if (client.dests === 'first' && /^[A-Z]+$/.test(arg)) continue;   // an httpie METHOD
+        const h = destHostOf(arg);
+        if (h) out.push(h);
+        if (client.dests === 'first') break;
+      }
+    } else if (name === 'git') {
+      // Only git's network subcommands contact a host; a URL in a commit message does not.
+      let a = 0;
+      while (a < args.length && args[a].startsWith('-')) a += /^-[Cc]$/.test(args[a]) ? 2 : 1;
+      if (GIT_NET.has(args[a])) for (const arg of args.slice(a + 1)) for (const m of arg.matchAll(URL_RE)) out.push(m[1]);
+    } else if (URL_ONLY_CLIENTS.has(name)) {
+      for (const arg of args) {
+        for (const m of arg.matchAll(URL_RE)) out.push(m[1]);
+      }
+    }
+  }
+}
+
+/** Hosts contacted by network clients in command position in a shell command. */
+export function shellEgressHosts(command) {
+  if (typeof command !== 'string' || !command) return [];
+  const cmd = command.length > 16384 ? command.slice(0, 16384) : command;
+  const out = [];
+  for (const target of [cmd, resolveVars(cmd), expandBraces(cmd)]) {
+    if (target) collectEgress(target, 0, out);
+  }
+  return [...new Set(out)];
+}

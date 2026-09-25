@@ -20,7 +20,7 @@ tables are CI-generated, all rows scored on the same neutral host).
 
 | firewall | recall (block) | recall (+gate) | precision | under-gate | deterministic |
 |---|---|---|---|---|---|
-| **warden** (default, offline) | **100.0%** | **100.0%** | **100%** | 1/44 | yes |
+| **warden** (default, offline) | **100.0%** | **100.0%** | **100%** | 0/44 | yes |
 | regex deny-list (naive baseline) | 19.0% | 19.0% | 91.9% | 44/44 | yes |
 | **Pipelock** v3.0.0 (scan API, out-of-box) | 6.0% | 6.0% | 96.5% | 38/44 | yes |
 | **AEGIS** v0.2.0 (pre-execution `/check`, blocking) | 4.2% | **54.8%** | **100%** | 29/44 | yes |

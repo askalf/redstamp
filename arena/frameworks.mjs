@@ -363,7 +363,7 @@ export function build() {
     '',
     `- **OWASP LLM Top 10 (2025):** ${llmSec.covered} covered, ${llmSec.partial} partial, ${10 - llmSec.covered - llmSec.partial} out of scope — the out-of-scope rows (model poisoning, embeddings, misinformation) are a *different layer*, not a gap.`,
     `- **OWASP Agentic (T1–T15):** ${agenticSec.covered} covered, ${agenticSec.partial} partial — spanning Tool Misuse, Privilege Compromise, RCE, and Repudiation.`,
-    `- **Measured:** **${tally.malBlocked}/${tally.malTot}** malicious samples hard-blocked (**${pf(tally.malBlocked / tally.malTot)}** recall) and **${tally.riskEsc}/${tally.riskTot}** risky samples escalated for review, at **${pf(benPrec)}** precision (${tally.benFp}/${tally.benTot} benign false-positives). The one risky under-gate is the documented \`risky-infra\` curl-download-to-disk case — a fetch, not an egress, allowed by design.`,
+    `- **Measured:** **${tally.malBlocked}/${tally.malTot}** malicious samples hard-blocked (**${pf(tally.malBlocked / tally.malTot)}** recall) and **${tally.riskEsc}/${tally.riskTot}** risky samples escalated for review, at **${pf(benPrec)}** precision (${tally.benFp}/${tally.benTot} benign false-positives).`,
     '',
     'Coverage without a measured number is a claim; every row below carries both.',
     '',
