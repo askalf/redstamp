@@ -24,6 +24,9 @@ export declare function safeStringify(v: unknown): string;
 /** String coercion that never throws. Arrays join with commas. */
 export declare function asStr(v: unknown): string;
 
+/** The host in one spelling: trailing dot dropped, numeric IPv4 forms dotted. */
+export declare function canonicalHost(host: string): string;
+
 /** Is this host outside loopback, private ranges and the allowlist? */
 export declare function isExternal(host: string | null | undefined, allow?: string[]): boolean;
 

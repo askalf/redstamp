@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Fixed: egress destinations are normalised, and ones the text cannot fix are gated
+
+With `egressAllow` set, several spellings of a destination reached a host the
+policy did not list while the verdict stayed green.
+
+- **Hosts are compared in one spelling.** An IPv4 address written as one
+  decimal number, in hex or octal, or with fewer than four parts is read as
+  the dotted address it names, on both the fetch path and the shell path, and
+  a trailing dot on a fully qualified name is dropped before the range and
+  allowlist checks. A single-label service name (`dario`, `postgres`) stays
+  local as before.
+- **Connection overrides are checked.** curl's `--connect-to`, `--resolve`,
+  `--dns-servers`, `--doh-url` and the other resolver flags change where a
+  named host's request goes, so the URL's host no longer vouches for it. Under
+  an allowlist such a call is gated.
+- **More destination forms are read:** git remotes in scp form
+  (`git@host:path`, `host:path`), bare hosts in download clients' positionals
+  (`iwr host`, `aria2c host/x`, `-Uri host`), clients started by `watch` or
+  `find -exec`, and `${IFS}` word splitting.
+- **A destination decided at run time is gated under an allowlist:** an
+  argument whose host is a variable or command substitution that the same
+  command does not assign literally, and a client fed by `xargs`. A variable in
+  the path (`https://api.example.com/$P`) leaves the host known and stays
+  allowed.
+- **Argv arrays:** a shell `command` given as an array is checked like the
+  same command as a string.
+- A new fuzz target (`fuzz/egress.fuzz.js`) runs the allowlist path and checks
+  that an allowed verdict never coexists with a destination outside the list.
+
 ### Fixed: the egress allowlist did not apply to shell commands
 
 With `egressAllow` set, `fetch https://evil.example` was gated but
