@@ -527,6 +527,17 @@ function resolveVars(cmd) {
   // literal assigned before the loop is not what `$NAME` holds inside it.
   const LOOP = /(?:^|[;&|]|\s)(?:for|select)\s+([A-Za-z_]\w*)\s+in\b/g;
   for (const f of cmd.matchAll(LOOP)) map.delete(f[1]);
+  // Builtins that bind a name from input at run time: `read` and
+  // `mapfile`/`readarray` (every name argument), `getopts OPTSTRING NAME`, and
+  // `printf -v NAME`. Forgetting a name only leaves `$NAME` unresolved, so
+  // forgetting one too many is safe; keeping a stale literal is not.
+  const BIND = /(?:^|[;&|]|\s)(read|mapfile|readarray|getopts|printf)\b([^;&|\n]*)/g;
+  for (const b of cmd.matchAll(BIND)) {
+    const words = b[2].trim().split(/\s+/).filter(Boolean);
+    if (b[1] === 'printf') { const i = words.indexOf('-v'); if (i >= 0 && words[i + 1]) map.delete(words[i + 1]); continue; }
+    if (b[1] === 'getopts') { if (words[1]) map.delete(words[1]); continue; }
+    for (const w of words) if (/^[A-Za-z_]\w*$/.test(w)) map.delete(w);
+  }
   if (!map.size) return null;
   const at = (name) => (map.has(name) ? map.get(name) : null);
   let out = cmd, changed = false;
