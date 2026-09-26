@@ -33,11 +33,14 @@ jobs:
       - run: npm test
       - name: Type-check the declarations
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        # typescript and @types/node come from .github/tsc's lockfile so npm ci
+        # verifies their integrity hashes; the project package.json stays
+        # dependency-free.
         run: |
-          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/tsc" typescript@5.9.3 @types/node@20.19.43
-          "$RUNNER_TEMP/tsc/node_modules/.bin/tsc" --noEmit --strict --target es2022 \
+          npm ci --no-audit --no-fund --prefix .github/tsc
+          .github/tsc/node_modules/.bin/tsc --noEmit --strict --target es2022 \
             --module node16 --moduleResolution node16 \
-            --typeRoots "$RUNNER_TEMP/tsc/node_modules/@types" --types node src/*.d.mts
+            --typeRoots .github/tsc/node_modules/@types --types node src/*.d.mts
 
   # test/labeler-config.test.mjs proves offline that every label the labeler
   # config and the issue forms APPLY is DECLARED in .github/labels.json. This
