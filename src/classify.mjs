@@ -510,13 +510,23 @@ function expandBraces(cmd) {
 // no embedded spaces/substitutions), bounded to 64 vars, and returned as an
 // ADDITIONAL target so it can only ADD coverage, never mask a rule. `$( )` command
 // substitution and `$(( ))` arithmetic are untouched (the name pattern needs a
-// letter/underscore right after `$`). null when nothing resolved.
+// letter/underscore right after `$`). An assignment whose value is not a whole
+// literal word (`u=$(cat h)`, `u=$X`, `u=a$X`) forgets the name, so a later `$u`
+// stays unresolved — it is decided at run time, not the empty string. null when
+// nothing resolved.
 function resolveVars(cmd) {
   if (cmd.indexOf('=') < 0 || cmd.indexOf('$') < 0) return null;
   const map = new Map();
-  const ASSIGN = /(?:^|[;&|]|\s)([A-Za-z_]\w*)=(?:'([^'\n]*)'|"([^"\n$`]*)"|([^\s;|&'"`$]*))/g;
+  const ASSIGN = /(?:^|[;&|]|\s)([A-Za-z_]\w*)=(?:(?:'([^'\n]*)'|"([^"\n$`]*)"|([^\s;|&'"`$]*))(?=[\s;|&]|$))?/g;
   let m, n = 0;
-  while ((m = ASSIGN.exec(cmd)) && n++ < 64) map.set(m[1], m[2] ?? m[3] ?? m[4] ?? '');
+  while ((m = ASSIGN.exec(cmd)) && n++ < 64) {
+    const v = m[2] ?? m[3] ?? m[4];
+    if (v === undefined) map.delete(m[1]); else map.set(m[1], v);
+  }
+  // A `for NAME in …` / `select NAME in …` loop rebinds NAME at run time, so a
+  // literal assigned before the loop is not what `$NAME` holds inside it.
+  const LOOP = /(?:^|[;&|]|\s)(?:for|select)\s+([A-Za-z_]\w*)\s+in\b/g;
+  for (const f of cmd.matchAll(LOOP)) map.delete(f[1]);
   if (!map.size) return null;
   const at = (name) => (map.has(name) ? map.get(name) : null);
   let out = cmd, changed = false;
@@ -646,23 +656,65 @@ export function classify(action) {
 // so each client has its own list.
 const flagSet = (s) => new Set(s.split(' '));
 const CLIENTS = {
-  curl: { dests: 'all', values: flagSet('-o --output -H --header -d --data --data-raw --data-binary --data-urlencode --data-ascii --json -X --request -u --user -A --user-agent -e --referer -T --upload-file -F --form --form-string -b --cookie -c --cookie-jar -U --proxy-user -m --max-time --connect-timeout -w --write-out -K --config -E --cert --key --cacert --capath -r --range -C --continue-at --retry --retry-delay --retry-max-time --resolve --connect-to -z --time-cond -D --dump-header -P --ftp-port -Q --quote -t --telnet-option --interface --local-port --limit-rate -y --speed-time -Y --speed-limit --max-filesize --oauth2-bearer --unix-socket --abstract-unix-socket --proto --proto-redir --noproxy'), destFlags: flagSet('--url -x --proxy --preproxy') },
+  curl: { dests: 'all', values: flagSet('-o --output -H --header -d --data --data-raw --data-binary --data-urlencode --data-ascii --json -X --request -u --user -A --user-agent -e --referer -T --upload-file -F --form --form-string -b --cookie -c --cookie-jar -U --proxy-user -m --max-time --connect-timeout -w --write-out -K --config -E --cert --key --cacert --capath -r --range -C --continue-at --retry --retry-delay --retry-max-time -z --time-cond -D --dump-header -P --ftp-port -Q --quote -t --telnet-option --interface --local-port --limit-rate -y --speed-time -Y --speed-limit --max-filesize --oauth2-bearer --unix-socket --abstract-unix-socket --proto --proto-redir --noproxy'), destFlags: flagSet('--url -x --proxy --preproxy'),
+    // Flags that change which address a named host connects to or how it is
+    // resolved. The URL's host no longer says where the request goes, so the
+    // allowlist cannot vouch for it.
+    overrides: flagSet('--resolve --connect-to --dns-servers --doh-url --dns-interface --dns-ipv4-addr --dns-ipv6-addr') },
   wget: { dests: 'all', values: flagSet('-O --output-document -o --output-file -a --append-output -P --directory-prefix -U --user-agent --header --post-data --post-file --body-data --body-file --method -e --execute -t --tries -T --timeout -w --wait --user --password --http-user --http-password -i --input-file -Q --quota -X --exclude-directories -I --include-directories -A --accept -R --reject -D --domains -l --level --limit-rate --load-cookies --save-cookies --ca-certificate --certificate --private-key -B --base --bind-address') },
   http: { dests: 'first', values: flagSet('-a --auth -A --auth-type -o --output --session --session-read-only --verify --cert --cert-key --timeout --pretty -s --style -p --print --format-options --max-redirects --ssl --ciphers --boundary'), destFlags: flagSet('--proxy') },
 };
 CLIENTS.https = CLIENTS.http;
 CLIENTS.xh = CLIENTS.http;
 CLIENTS.xhs = CLIENTS.http;
-// Clients whose destination is only ever read from a scheme'd URL.
 const GIT_NET = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote', 'archive', 'submodule']);
-const URL_ONLY_CLIENTS = new Set(['aria2c', 'lwp-download', 'lwp-request', 'invoke-webrequest', 'invoke-restmethod', 'iwr', 'irm', 'start-bitstransfer', 'certutil', 'bitsadmin']);
-const WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'timeout', 'nice', 'ionice', 'exec', 'command', 'builtin', 'xargs', 'stdbuf', 'setsid', 'proxychains', 'proxychains4', 'torsocks', 'busybox']);
+// git's scp-like remote: [user@]host:path, no scheme.
+const GIT_SCP_RE = /^(?:[^@\s/:]+@)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?):(?!\/\/)/i;
+// Options of git's network subcommands that take the next word as their value,
+// so that word is not the repository (`git clone --depth 1 "$REPO"`).
+const GIT_VALUES = flagSet('--depth -b --branch -o --origin -j --jobs --reference --reference-if-able --template -u --upload-pack --receive-pack --exec -c --config --filter --separate-git-dir --shallow-since --shallow-exclude --server-option --push-option');
+const gitRepoArg = (rest) => { for (let a = 0; a < rest.length; a++) { if (!rest[a].startsWith('-')) return rest[a]; if (GIT_VALUES.has(rest[a])) a++; } return undefined; };
+// Download clients: a scheme'd URL anywhere is a destination. A bare host is read
+// from a destination flag's value and from the positionals `dests` names —
+// 'first' (later positionals are output files) or 'all'. Only a flag in `values` consumes the next
+// word; any other flag is a switch, so it cannot hide the destination after it.
+// `ci`: PowerShell and certutil flags are case-insensitive. `netVerbs`: the
+// client reads a bare host only under one of these (certutil -hashfile app.exe
+// names a local file).
+const DOWNLOADERS = {
+  aria2c: { dests: 'all', destFlags: flagSet('--all-proxy --http-proxy --https-proxy --ftp-proxy'),
+    values: flagSet('-d --dir -o --out -i --input-file -l --log -j --max-concurrent-downloads -s --split -x --max-connection-per-server -k --min-split-size -t --timeout -m --max-tries -U --user-agent -T --torrent-file -M --metalink-file -O --index-out --header --referer --load-cookies --save-cookies --http-user --http-passwd --ftp-user --ftp-passwd --max-download-limit --max-overall-download-limit --conf-path --checksum --seed-time --seed-ratio') },
+  'lwp-download': { dests: 'first', destFlags: flagSet(''), values: flagSet('') },
+  'lwp-request': { dests: 'all', destFlags: flagSet('-p'), values: flagSet('-m -b -t -i -o -H -C -c') },
+  'invoke-webrequest': { dests: 'first', ci: true, destFlags: flagSet('-uri -proxy'),
+    values: flagSet('-method -body -headers -outfile -infile -contenttype -useragent -websession -sessionvariable -credential -certificate -certificatethumbprint -proxycredential -timeoutsec -maximumredirection -maximumretrycount -retryintervalsec -transferencoding -form -authentication -token -custommethod -sslprotocol -httpversion -connectiontimeoutseconds -operationtimeoutseconds -responseheadersvariable -statuscodevariable') },
+  'start-bitstransfer': { dests: 'first', ci: true, destFlags: flagSet('-source'),
+    values: flagSet('-destination -displayname -description -priority -transfertype -credential -proxylist -proxyusage -proxybypass -proxycredential -authentication -retryinterval -retrytimeout -transferpolicy -customheaders -notifyflags -notifycmdline -aclflags -securityflags -certstorelocation -certstorename -certhash -maxdownloadtime') },
+  certutil: { dests: 'first', ci: true, destFlags: flagSet(''), values: flagSet('-config -p -t'), netVerbs: flagSet('-urlcache -verifyctl -url') },
+  bitsadmin: { dests: 'all', ci: true, destFlags: flagSet(''), values: flagSet('') },
+};
+DOWNLOADERS['invoke-restmethod'] = DOWNLOADERS.iwr = DOWNLOADERS.irm = DOWNLOADERS['invoke-webrequest'];
+const URL_ONLY_CLIENTS = new Set(Object.keys(DOWNLOADERS));
+const WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'timeout', 'nice', 'ionice', 'exec', 'command', 'builtin', 'xargs', 'stdbuf', 'setsid', 'proxychains', 'proxychains4', 'torsocks', 'busybox', 'watch']);
+// find runs the command after -exec/-execdir/-ok/-okdir.
+const FIND_EXEC_RE = /^-(?:exec|execdir|ok|okdir)$/;
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'eval', 'powershell', 'pwsh', 'cmd']);
 // Words that can precede a command without being it.
 const KEYWORDS = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until']);
 const isCommandName = (n) => Object.hasOwn(CLIENTS, n) || URL_ONLY_CLIENTS.has(n) || SHELLS.has(n) || n === 'git';
-// A bare destination: host[:port][/path]. Needs a dotted name, an IPv4 or localhost.
-const BARE_DEST_RE = /^(?:[a-z0-9-]{1,63}\.){1,10}[a-z]{2,24}(?::\d{1,5})?(?:[/?#]|$)|^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?:[/?#]|$)|^localhost(?::\d{1,5})?(?:[/?#]|$)/i;
+// A bare destination: host[:port][/path]. A dotted name (optionally fully
+// qualified with a trailing dot), an IPv4 address in any spelling a resolver
+// accepts (dotted, one decimal number, hex), or localhost.
+const BARE_DEST_RE = /^(?:[a-z0-9-]{1,63}\.){1,10}[a-z]{2,24}\.?(?::\d{1,5})?(?:[/?#]|$)|^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?:[/?#]|$)|^(?:0x[0-9a-f]{1,8}|\d{8,10})(?::\d{1,5})?(?:[/?#]|$)|^localhost(?::\d{1,5})?(?:[/?#]|$)/i;
+// A word the shell expands at run time: its value is not in the text.
+const DYNAMIC_RE = /[$`]/;
+// Whether the HOST part of a destination argument is expanded at run time. A
+// variable in the path (`https://api.example.com/$P`) leaves the host known.
+const hostIsDynamic = (arg) => {
+  if (!DYNAMIC_RE.test(arg)) return false;
+  const m = /^[a-z][a-z0-9+.-]*:\/\/([^/\s?#]*)/i.exec(arg);
+  return DYNAMIC_RE.test(m ? m[1] : arg.split(/[/?#]/)[0]);
+};
 
 // Split into simple commands on unquoted ; | & and newlines (outside $( … )),
 // each as words with quotes removed, plus the bodies of every $( … ) and `…`.
@@ -723,21 +775,30 @@ function destHostOf(arg) {
   return null;
 }
 
-function collectEgress(cmd, depth, out) {
+// `unk`, when given, collects why a network client's destination cannot be read
+// from the text (a connection override, an argument expanded at run time, input
+// fed by xargs). Under an allowlist such a call cannot be vouched for.
+function collectEgress(cmd, depth, out, unk = null) {
   if (depth > 3 || out.length > 64) return;
   const { cmds, subs } = shellCommands(cmd);
-  for (const s of subs) collectEgress(s, depth + 1, out);
+  for (const s of subs) collectEgress(s, depth + 1, out, unk);
   for (const words of cmds) {
     const unescape = (w) => w.replace(/\\(.)/g, '$1');
     const names = (w) => [baseName(unescape(w)), baseName(w)];   // POSIX escape, Windows path
-    let k = 0;
+    let k = 0, viaXargs = false;
     // Skip keywords, VAR=value prefixes and wrappers. A wrapper's own options can
     // take values (`sudo -u root`, `timeout -s KILL 5`), so after one, jump to the
     // next word that names a known command.
     while (k < words.length) {
       const w = words[k];
       if (KEYWORDS.has(w) || /^[A-Za-z_]\w*=/.test(w)) { k++; continue; }
+      if (names(w).includes('find')) {
+        const e = words.findIndex((x, i) => i > k && FIND_EXEC_RE.test(x));
+        if (e > 0 && e + 1 < words.length) { k = e + 1; continue; }
+        break;
+      }
       if (names(w).some((n) => WRAPPERS.has(n))) {
+        if (names(w).includes('xargs')) viaXargs = true;
         let j = k + 1;
         while (j < words.length && j <= k + 8 && !names(words[j]).some((n) => isCommandName(n) || WRAPPERS.has(n))) j++;
         k = j < words.length && j <= k + 8 ? j : k + 1;
@@ -751,10 +812,12 @@ function collectEgress(cmd, depth, out) {
     const args = words.slice(k + 1).map(unescape);
     if (SHELLS.has(name)) {                 // bash -c "…", powershell -Command "…", cmd /c "…"
       const body = args.filter((a) => !/^[-/]\w+$/.test(a)).join(' ');
-      if (body) collectEgress(body, depth + 1, out);
+      if (body) collectEgress(body, depth + 1, out, unk);
       continue;
     }
     const client = Object.hasOwn(CLIENTS, name) ? CLIENTS[name] : null;
+    const isNetClient = !!client || name === 'git' || URL_ONLY_CLIENTS.has(name);
+    if (unk && isNetClient && viaXargs) unk.push(`${name} via xargs`);
     if (client) {
       for (let a = 0; a < args.length; a++) {
         const arg = args[a];
@@ -762,9 +825,16 @@ function collectEgress(cmd, depth, out) {
           // `--url=https://x` or `--url https://x`: the value is a destination.
           const eq = arg.startsWith('--') ? arg.indexOf('=') : -1;
           const flag = eq > 0 ? arg.slice(0, eq) : arg;
+          if (client.overrides?.has(flag)) {
+            if (unk) unk.push(`${name} ${flag}`);
+            if (eq < 0) a++;
+            continue;
+          }
           if (client.destFlags?.has(flag)) {
             const value = eq > 0 ? arg.slice(eq + 1) : args[++a];
-            const h = value ? destHostOf(value.replace(/^[a-z]+:(?!\/\/)/i, '')) : null;   // httpie: `http:http://proxy`
+            const dest = value ? value.replace(/^[a-z]+:(?!\/\/)/i, '') : '';   // httpie: `http:http://proxy`
+            if (dest && unk && hostIsDynamic(dest)) unk.push(`${name} ${flag}`);
+            const h = dest ? destHostOf(dest) : null;
             if (h) out.push(h);
             continue;
           }
@@ -781,6 +851,7 @@ function collectEgress(cmd, depth, out) {
           continue;
         }
         if (client.dests === 'first' && /^[A-Z]+$/.test(arg)) continue;   // an httpie METHOD
+        if (unk && hostIsDynamic(arg)) unk.push(`${name} ${arg.slice(0, 40)}`);
         const h = destHostOf(arg);
         if (h) out.push(h);
         if (client.dests === 'first') break;
@@ -789,22 +860,80 @@ function collectEgress(cmd, depth, out) {
       // Only git's network subcommands contact a host; a URL in a commit message does not.
       let a = 0;
       while (a < args.length && args[a].startsWith('-')) a += /^-[Cc]$/.test(args[a]) ? 2 : 1;
-      if (GIT_NET.has(args[a])) for (const arg of args.slice(a + 1)) for (const m of arg.matchAll(URL_RE)) out.push(m[1]);
+      if (GIT_NET.has(args[a])) {
+        const rest = args.slice(a + 1);
+        const repo = gitRepoArg(rest);   // the repository is the first positional
+        if (unk && repo && hostIsDynamic(repo)) unk.push(`git ${repo.slice(0, 40)}`);
+        for (const arg of rest) {
+          let hit = false;
+          for (const m of arg.matchAll(URL_RE)) { out.push(m[1]); hit = true; }
+          const scp = hit ? null : GIT_SCP_RE.exec(arg);
+          if (scp && !/^[a-z]$/i.test(scp[1])) out.push(scp[1]);   // a one-letter "host" is a Windows drive
+        }
+      }
     } else if (URL_ONLY_CLIENTS.has(name)) {
-      for (const arg of args) {
-        for (const m of arg.matchAll(URL_RE)) out.push(m[1]);
+      const dl = DOWNLOADERS[name];
+      const urls = (w) => { let hit = false; for (const m of w.matchAll(URL_RE)) { out.push(m[1]); hit = true; } return hit; };
+      let seen = 0;   // positionals so far
+      const bare = !dl.netVerbs || args.some((x) => dl.netVerbs.has(x.toLowerCase()));
+      for (let a = 0; a < args.length; a++) {
+        const arg = args[a];
+        const hit = urls(arg);
+        // A flag's value (`-OutFile out.txt`, `-o out.tgz`) is not a destination;
+        // `-Uri host` and `-Uri:host` are.
+        if (/^-/.test(arg)) {
+          const sep = arg.search(/[:=]/);
+          const raw = sep > 0 ? arg.slice(0, sep) : arg;
+          const flag = dl.ci ? raw.toLowerCase() : raw;
+          if (dl.destFlags.has(flag)) {
+            const value = sep > 0 ? arg.slice(sep + 1) : args[++a];
+            if (value && sep < 0) urls(value);
+            if (value && unk && hostIsDynamic(value)) unk.push(`${name} ${value.slice(0, 40)}`);
+            const h = value ? destHostOf(value) : null;
+            if (h) out.push(h);
+          } else if (sep < 0 && dl.values.has(flag) && a + 1 < args.length) urls(args[++a]);
+          continue;
+        }
+        if (dl.dests === 'first' && seen > 0) continue;
+        seen++;
+        if (hit) continue;
+        if (!bare) continue;
+        if (unk && hostIsDynamic(arg)) unk.push(`${name} ${arg.slice(0, 40)}`);
+        const h = destHostOf(arg);
+        if (h) out.push(h);
       }
     }
   }
 }
+
+// Shell word splitting on IFS: `curl${IFS}host` runs curl with host as its
+// argument, so the parser sees the same words the shell will.
+const ifsAsSpace = (cmd) => (/\$\{?IFS\b\}?/.test(cmd) ? cmd.replace(/\$\{IFS\}|\$IFS\b/g, ' ') : null);
 
 /** Hosts contacted by network clients in command position in a shell command. */
 export function shellEgressHosts(command) {
   if (typeof command !== 'string' || !command) return [];
   const cmd = command.length > 16384 ? command.slice(0, 16384) : command;
   const out = [];
-  for (const target of [cmd, resolveVars(cmd), expandBraces(cmd)]) {
+  const spaced = ifsAsSpace(cmd);
+  for (const target of [cmd, resolveVars(cmd), expandBraces(cmd), spaced, spaced && resolveVars(spaced)]) {
     if (target) collectEgress(target, 0, out);
   }
   return [...new Set(out)];
+}
+
+/**
+ * Network calls in a shell command whose destination the text does not fix:
+ * a connection override flag, an argument the shell expands at run time
+ * (after literal assignments in the same command are substituted), or input
+ * supplied by xargs. An egress allowlist cannot vouch for these.
+ */
+export function shellEgressUnresolved(command) {
+  if (typeof command !== 'string' || !command) return [];
+  const cmd = command.length > 16384 ? command.slice(0, 16384) : command;
+  const spaced = ifsAsSpace(cmd) ?? cmd;
+  const target = resolveVars(spaced) ?? spaced;
+  const unk = [];
+  collectEgress(target, 0, [], unk);
+  return [...new Set(unk)];
 }

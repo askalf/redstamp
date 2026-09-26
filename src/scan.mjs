@@ -213,6 +213,21 @@ export function safeStringify(v) {
 // quoting) — the tool/method comparisons that use it rely on that.
 export const asStr = (v) => { try { return Array.isArray(v) ? v.map(asStr).join(',') : v == null ? '' : String(v); } catch { return ''; } };
 
+// The host a client actually connects to, in one spelling. Resolvers accept an
+// IPv4 address as one decimal number, in hex or octal, or with fewer than four
+// parts, and a fully qualified name may end in a dot; the WHATWG URL parser
+// applies the same rules, so every spelling of one address compares equal to the
+// dotted form the range and allowlist checks below are written for.
+export function canonicalHost(host) {
+  let h = String(host).replace(/\.$/, '');
+  if (!h || /[\s/?#@\\]/.test(h)) return h;
+  try {
+    const parsed = new URL(h.includes(':') ? `http://[${h}]/` : `http://${h}/`).hostname;
+    h = parsed.replace(/^\[(.*)\]$/, '$1');
+  } catch { /* not a host a URL can carry: keep it as written */ }
+  return h;
+}
+
 // Is `host` a destination OUTSIDE this machine/allowlist? Parses out userinfo
 // and port and anchors loopback/private ranges, so `localhost.attacker.com`,
 // `127.0.0.1.evil.com`, and `[2001:db8::1]` are correctly treated as EXTERNAL
@@ -223,6 +238,7 @@ export function isExternal(host, allow = []) {
   const at = h.lastIndexOf('@'); if (at >= 0) h = h.slice(at + 1);   // strip user:pass@
   h = h.replace(/^\[([^\]]*)\](?::\d+)?$/, '$1');                     // strip brackets (+ port) from [v6]:port
   if (/^[^:]+:\d+$/.test(h)) h = h.replace(/:\d+$/, '');              // strip host:port — but NOT a bare IPv6's colons
+  h = canonicalHost(h);
   // genuine loopback / unspecified / RFC1918 / link-local → internal
   if (h === 'localhost' || h.endsWith('.localhost')) return false;   // .localhost always resolves to loopback (RFC 6761)
   if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return false;
