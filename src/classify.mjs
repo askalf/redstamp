@@ -523,6 +523,10 @@ function resolveVars(cmd) {
     const v = m[2] ?? m[3] ?? m[4];
     if (v === undefined) map.delete(m[1]); else map.set(m[1], v);
   }
+  // A `for NAME in …` / `select NAME in …` loop rebinds NAME at run time, so a
+  // literal assigned before the loop is not what `$NAME` holds inside it.
+  const LOOP = /(?:^|[;&|]|\s)(?:for|select)\s+([A-Za-z_]\w*)\s+in\b/g;
+  for (const f of cmd.matchAll(LOOP)) map.delete(f[1]);
   if (!map.size) return null;
   const at = (name) => (map.has(name) ? map.get(name) : null);
   let out = cmd, changed = false;
@@ -666,6 +670,10 @@ CLIENTS.xhs = CLIENTS.http;
 const GIT_NET = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote', 'archive', 'submodule']);
 // git's scp-like remote: [user@]host:path, no scheme.
 const GIT_SCP_RE = /^(?:[^@\s/:]+@)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?):(?!\/\/)/i;
+// Options of git's network subcommands that take the next word as their value,
+// so that word is not the repository (`git clone --depth 1 "$REPO"`).
+const GIT_VALUES = flagSet('--depth -b --branch -o --origin -j --jobs --reference --reference-if-able --template -u --upload-pack --receive-pack --exec -c --config --filter --separate-git-dir --shallow-since --shallow-exclude --server-option --push-option');
+const gitRepoArg = (rest) => { for (let a = 0; a < rest.length; a++) { if (!rest[a].startsWith('-')) return rest[a]; if (GIT_VALUES.has(rest[a])) a++; } return undefined; };
 // Download clients: a scheme'd URL anywhere is a destination. A bare host is read
 // from a destination flag's value and from the positionals `dests` names —
 // 'first' (later positionals are output files) or 'all'. Only a flag in `values` consumes the next
@@ -824,7 +832,9 @@ function collectEgress(cmd, depth, out, unk = null) {
           }
           if (client.destFlags?.has(flag)) {
             const value = eq > 0 ? arg.slice(eq + 1) : args[++a];
-            const h = value ? destHostOf(value.replace(/^[a-z]+:(?!\/\/)/i, '')) : null;   // httpie: `http:http://proxy`
+            const dest = value ? value.replace(/^[a-z]+:(?!\/\/)/i, '') : '';   // httpie: `http:http://proxy`
+            if (dest && unk && hostIsDynamic(dest)) unk.push(`${name} ${flag}`);
+            const h = dest ? destHostOf(dest) : null;
             if (h) out.push(h);
             continue;
           }
@@ -852,7 +862,7 @@ function collectEgress(cmd, depth, out, unk = null) {
       while (a < args.length && args[a].startsWith('-')) a += /^-[Cc]$/.test(args[a]) ? 2 : 1;
       if (GIT_NET.has(args[a])) {
         const rest = args.slice(a + 1);
-        const repo = rest.find((x) => !x.startsWith('-'));   // the repository is the first positional
+        const repo = gitRepoArg(rest);   // the repository is the first positional
         if (unk && repo && hostIsDynamic(repo)) unk.push(`git ${repo.slice(0, 40)}`);
         for (const arg of rest) {
           let hit = false;

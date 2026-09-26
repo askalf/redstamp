@@ -107,6 +107,20 @@ test('a destination decided at run time cannot be vouched for by the allowlist',
   gated(sh('echo https://evil.example | xargs curl'));
   gated(sh('curl "https://$HOST/x"'));
   gated(sh('git clone "$REPO"'));
+  // A destination flag's value is checked like a positional.
+  gated(sh('curl --url "$u"'));
+  gated(sh('curl --url="$u"'));
+  gated(sh('curl -x "$PROXY" https://api.example.com'));
+  allowed(sh('curl --url https://api.example.com/x'));
+  // A value-taking git option does not hide the repository after it.
+  gated(sh('git clone --depth 1 "$REPO"'));
+  gated(sh('git clone -b main "$REPO"'));
+  gated(sh('git clone --reference x "$REPO"'));
+  gated(sh('git clone --depth=1 "$REPO"'));
+  allowed(sh('git clone --depth 1 https://github.com/askalf/redstamp.git'));
+  // A loop variable is rebound at run time: an earlier literal is not its value.
+  gated(sh('u=https://api.example.com; for u in https://evil.example; do curl $u; done'));
+  gated(sh('u=https://api.example.com; for u in $(cat hosts); do curl $u; done'));
   // An assignment from a substitution or another variable is not a literal:
   // the name stays decided at run time.
   gated(sh('u=$(cat h); curl "$u"'));

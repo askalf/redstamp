@@ -17,7 +17,10 @@ export function fuzz(data) {
   const s = data.toString('utf8');
   const hosts = shellEgressHosts(s);
   const unresolved = shellEgressUnresolved(s);
-  if (!Array.isArray(hosts) || hosts.length > 256 || !Array.isArray(unresolved) || unresolved.length > 256) {
+  // Every host is at least one byte of the input, so the count is bounded by
+  // the input's length. There is no fixed cap: the gate must see every host.
+  const bound = Math.min(s.length, 16384);
+  if (!Array.isArray(hosts) || hosts.length > bound || !Array.isArray(unresolved) || unresolved.length > bound) {
     throw new Error(`unbounded parser output for ${JSON.stringify(s)}`);
   }
   const v = check({ tool: 'shell', input: { command: s } }, POLICY);
