@@ -191,7 +191,10 @@ jobs:
           # renaming these assets breaks every published install one-liner.
           cp "$TARBALL" redstamp.tgz
           cp "${TARBALL}.sigstore.json" redstamp.tgz.sigstore.json
-          gh release upload "$TAG" --clobber "$TARBALL" "${TARBALL}.sigstore.json" redstamp.tgz redstamp.tgz.sigstore.json
+          # Scorecard credits provenance only to *.intoto.jsonl assets: one
+          # DSSE envelope per line, taken from the v0.3 Sigstore bundle.
+          jq -ec '.dsseEnvelope' "$BUNDLE" > "${TARBALL}.intoto.jsonl"
+          gh release upload "$TAG" --clobber "$TARBALL" "${TARBALL}.sigstore.json" "${TARBALL}.intoto.jsonl" redstamp.tgz redstamp.tgz.sigstore.json
 
       - name: Dispatch npm publish (OIDC via publish.yml)
         if: steps.gate.outputs.skip != 'true' && steps.bumped.outputs.skip != 'true'
