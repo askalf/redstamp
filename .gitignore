@@ -14,3 +14,6 @@ __pycache__/
 native/warden-fast
 native/warden-fast.exe
 native/warden-fast-*
+# fuzz.yml / fuzz/run.mjs working dirs
+fuzz/corpus/
+fuzz/crashes/
