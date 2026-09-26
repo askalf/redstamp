@@ -1,0 +1,9 @@
+{
+  "name": "redstamp-typecheck",
+  "private": true,
+  "description": "CI-only toolchain for type-checking the published declarations (src/*.d.mts) in ci.yml. Kept out of the project's own package.json so the published tarball stays dependency-free; the committed lockfile gives `npm ci` integrity hashes (Scorecard Pinned-Dependencies).",
+  "dependencies": {
+    "@types/node": "20.19.43",
+    "typescript": "5.9.3"
+  }
+}
