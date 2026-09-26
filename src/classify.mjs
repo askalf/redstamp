@@ -670,7 +670,9 @@ const GIT_SCP_RE = /^(?:[^@\s/:]+@)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?):(?!\/\
 // from a destination flag's value and from the positionals `dests` names —
 // 'first' (later positionals are output files) or 'all'. Only a flag in `values` consumes the next
 // word; any other flag is a switch, so it cannot hide the destination after it.
-// `ci`: PowerShell and certutil flags are case-insensitive.
+// `ci`: PowerShell and certutil flags are case-insensitive. `netVerbs`: the
+// client reads a bare host only under one of these (certutil -hashfile app.exe
+// names a local file).
 const DOWNLOADERS = {
   aria2c: { dests: 'all', destFlags: flagSet('--all-proxy --http-proxy --https-proxy --ftp-proxy'),
     values: flagSet('-d --dir -o --out -i --input-file -l --log -j --max-concurrent-downloads -s --split -x --max-connection-per-server -k --min-split-size -t --timeout -m --max-tries -U --user-agent -T --torrent-file -M --metalink-file -O --index-out --header --referer --load-cookies --save-cookies --http-user --http-passwd --ftp-user --ftp-passwd --max-download-limit --max-overall-download-limit --conf-path --checksum --seed-time --seed-ratio') },
@@ -680,7 +682,7 @@ const DOWNLOADERS = {
     values: flagSet('-method -body -headers -outfile -infile -contenttype -useragent -websession -sessionvariable -credential -certificate -certificatethumbprint -proxycredential -timeoutsec -maximumredirection -maximumretrycount -retryintervalsec -transferencoding -form -authentication -token -custommethod -sslprotocol -httpversion -connectiontimeoutseconds -operationtimeoutseconds -responseheadersvariable -statuscodevariable') },
   'start-bitstransfer': { dests: 'first', ci: true, destFlags: flagSet('-source'),
     values: flagSet('-destination -displayname -description -priority -transfertype -credential -proxylist -proxyusage -proxybypass -proxycredential -authentication -retryinterval -retrytimeout -transferpolicy -customheaders -notifyflags -notifycmdline -aclflags -securityflags -certstorelocation -certstorename -certhash -maxdownloadtime') },
-  certutil: { dests: 'first', ci: true, destFlags: flagSet(''), values: flagSet('-config -p -t') },
+  certutil: { dests: 'first', ci: true, destFlags: flagSet(''), values: flagSet('-config -p -t'), netVerbs: flagSet('-urlcache -verifyctl -url') },
   bitsadmin: { dests: 'all', ci: true, destFlags: flagSet(''), values: flagSet('') },
 };
 DOWNLOADERS['invoke-restmethod'] = DOWNLOADERS.iwr = DOWNLOADERS.irm = DOWNLOADERS['invoke-webrequest'];
@@ -863,6 +865,7 @@ function collectEgress(cmd, depth, out, unk = null) {
       const dl = DOWNLOADERS[name];
       const urls = (w) => { let hit = false; for (const m of w.matchAll(URL_RE)) { out.push(m[1]); hit = true; } return hit; };
       let seen = 0;   // positionals so far
+      const bare = !dl.netVerbs || args.some((x) => dl.netVerbs.has(x.toLowerCase()));
       for (let a = 0; a < args.length; a++) {
         const arg = args[a];
         const hit = urls(arg);
@@ -884,6 +887,7 @@ function collectEgress(cmd, depth, out, unk = null) {
         if (dl.dests === 'first' && seen > 0) continue;
         seen++;
         if (hit) continue;
+        if (!bare) continue;
         if (unk && hostIsDynamic(arg)) unk.push(`${name} ${arg.slice(0, 40)}`);
         const h = destHostOf(arg);
         if (h) out.push(h);
