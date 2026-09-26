@@ -510,13 +510,19 @@ function expandBraces(cmd) {
 // no embedded spaces/substitutions), bounded to 64 vars, and returned as an
 // ADDITIONAL target so it can only ADD coverage, never mask a rule. `$( )` command
 // substitution and `$(( ))` arithmetic are untouched (the name pattern needs a
-// letter/underscore right after `$`). null when nothing resolved.
+// letter/underscore right after `$`). An assignment whose value is not a whole
+// literal word (`u=$(cat h)`, `u=$X`, `u=a$X`) forgets the name, so a later `$u`
+// stays unresolved — it is decided at run time, not the empty string. null when
+// nothing resolved.
 function resolveVars(cmd) {
   if (cmd.indexOf('=') < 0 || cmd.indexOf('$') < 0) return null;
   const map = new Map();
-  const ASSIGN = /(?:^|[;&|]|\s)([A-Za-z_]\w*)=(?:'([^'\n]*)'|"([^"\n$`]*)"|([^\s;|&'"`$]*))/g;
+  const ASSIGN = /(?:^|[;&|]|\s)([A-Za-z_]\w*)=(?:(?:'([^'\n]*)'|"([^"\n$`]*)"|([^\s;|&'"`$]*))(?=[\s;|&]|$))?/g;
   let m, n = 0;
-  while ((m = ASSIGN.exec(cmd)) && n++ < 64) map.set(m[1], m[2] ?? m[3] ?? m[4] ?? '');
+  while ((m = ASSIGN.exec(cmd)) && n++ < 64) {
+    const v = m[2] ?? m[3] ?? m[4];
+    if (v === undefined) map.delete(m[1]); else map.set(m[1], v);
+  }
   if (!map.size) return null;
   const at = (name) => (map.has(name) ? map.get(name) : null);
   let out = cmd, changed = false;
@@ -660,9 +666,25 @@ CLIENTS.xhs = CLIENTS.http;
 const GIT_NET = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote', 'archive', 'submodule']);
 // git's scp-like remote: [user@]host:path, no scheme.
 const GIT_SCP_RE = /^(?:[^@\s/:]+@)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?):(?!\/\/)/i;
-// Download clients with no per-flag table: a scheme'd URL anywhere is a
-// destination, and so is a bare host in a positional (not a flag's value).
-const URL_ONLY_CLIENTS = new Set(['aria2c', 'lwp-download', 'lwp-request', 'invoke-webrequest', 'invoke-restmethod', 'iwr', 'irm', 'start-bitstransfer', 'certutil', 'bitsadmin']);
+// Download clients: a scheme'd URL anywhere is a destination. A bare host is read
+// from a destination flag's value and from the positionals `dests` names —
+// 'first' (later positionals are output files) or 'all'. Only a flag in `values` consumes the next
+// word; any other flag is a switch, so it cannot hide the destination after it.
+// `ci`: PowerShell and certutil flags are case-insensitive.
+const DOWNLOADERS = {
+  aria2c: { dests: 'all', destFlags: flagSet('--all-proxy --http-proxy --https-proxy --ftp-proxy'),
+    values: flagSet('-d --dir -o --out -i --input-file -l --log -j --max-concurrent-downloads -s --split -x --max-connection-per-server -k --min-split-size -t --timeout -m --max-tries -U --user-agent -T --torrent-file -M --metalink-file -O --index-out --header --referer --load-cookies --save-cookies --http-user --http-passwd --ftp-user --ftp-passwd --max-download-limit --max-overall-download-limit --conf-path --checksum --seed-time --seed-ratio') },
+  'lwp-download': { dests: 'first', destFlags: flagSet(''), values: flagSet('') },
+  'lwp-request': { dests: 'all', destFlags: flagSet('-p'), values: flagSet('-m -b -t -i -o -H -C -c') },
+  'invoke-webrequest': { dests: 'first', ci: true, destFlags: flagSet('-uri -proxy'),
+    values: flagSet('-method -body -headers -outfile -infile -contenttype -useragent -websession -sessionvariable -credential -certificate -certificatethumbprint -proxycredential -timeoutsec -maximumredirection -maximumretrycount -retryintervalsec -transferencoding -form -authentication -token -custommethod -sslprotocol -httpversion -connectiontimeoutseconds -operationtimeoutseconds -responseheadersvariable -statuscodevariable') },
+  'start-bitstransfer': { dests: 'first', ci: true, destFlags: flagSet('-source'),
+    values: flagSet('-destination -displayname -description -priority -transfertype -credential -proxylist -proxyusage -proxybypass -proxycredential -authentication -retryinterval -retrytimeout -transferpolicy -customheaders -notifyflags -notifycmdline -aclflags -securityflags -certstorelocation -certstorename -certhash -maxdownloadtime') },
+  certutil: { dests: 'first', ci: true, destFlags: flagSet(''), values: flagSet('-config -p -t') },
+  bitsadmin: { dests: 'all', ci: true, destFlags: flagSet(''), values: flagSet('') },
+};
+DOWNLOADERS['invoke-restmethod'] = DOWNLOADERS.iwr = DOWNLOADERS.irm = DOWNLOADERS['invoke-webrequest'];
+const URL_ONLY_CLIENTS = new Set(Object.keys(DOWNLOADERS));
 const WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'timeout', 'nice', 'ionice', 'exec', 'command', 'builtin', 'xargs', 'stdbuf', 'setsid', 'proxychains', 'proxychains4', 'torsocks', 'busybox', 'watch']);
 // find runs the command after -exec/-execdir/-ok/-okdir.
 const FIND_EXEC_RE = /^-(?:exec|execdir|ok|okdir)$/;
@@ -838,19 +860,31 @@ function collectEgress(cmd, depth, out, unk = null) {
         }
       }
     } else if (URL_ONLY_CLIENTS.has(name)) {
+      const dl = DOWNLOADERS[name];
+      const urls = (w) => { let hit = false; for (const m of w.matchAll(URL_RE)) { out.push(m[1]); hit = true; } return hit; };
+      let seen = 0;   // positionals so far
       for (let a = 0; a < args.length; a++) {
         const arg = args[a];
-        let hit = false;
-        for (const m of arg.matchAll(URL_RE)) { out.push(m[1]); hit = true; }
-        if (hit) continue;
-        if (unk && hostIsDynamic(arg)) unk.push(`${name} ${arg.slice(0, 40)}`);
+        const hit = urls(arg);
         // A flag's value (`-OutFile out.txt`, `-o out.tgz`) is not a destination;
-        // `-Uri host` is.
+        // `-Uri host` and `-Uri:host` are.
         if (/^-/.test(arg)) {
-          if (/^-{1,2}uri$/i.test(arg) && args[a + 1]) { const h = destHostOf(args[++a]); if (h) out.push(h); }
-          else if (a + 1 < args.length && !/^-/.test(args[a + 1]) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(args[a + 1])) a++;
+          const sep = arg.search(/[:=]/);
+          const raw = sep > 0 ? arg.slice(0, sep) : arg;
+          const flag = dl.ci ? raw.toLowerCase() : raw;
+          if (dl.destFlags.has(flag)) {
+            const value = sep > 0 ? arg.slice(sep + 1) : args[++a];
+            if (value && sep < 0) urls(value);
+            if (value && unk && hostIsDynamic(value)) unk.push(`${name} ${value.slice(0, 40)}`);
+            const h = value ? destHostOf(value) : null;
+            if (h) out.push(h);
+          } else if (sep < 0 && dl.values.has(flag) && a + 1 < args.length) urls(args[++a]);
           continue;
         }
+        if (dl.dests === 'first' && seen > 0) continue;
+        seen++;
+        if (hit) continue;
+        if (unk && hostIsDynamic(arg)) unk.push(`${name} ${arg.slice(0, 40)}`);
         const h = destHostOf(arg);
         if (h) out.push(h);
       }
