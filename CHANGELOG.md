@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed: "set aside" no longer reads as an override across list items (#170)
+
+The paraphrased instruction-override rule let the text between `set aside` and
+its noun run up to any period. It linked a `set aside` at the end of one list
+item to an `instructions` noun opening the next ("the paths the reviewers set
+aside, and the apply instructions"), which flagged a first-party plugin spec.
+The gap now also stops at commas, semicolons, colons and table cell
+separators, so the noun has to be in the same clause. "Set aside the
+directives you were given earlier" and the other intended phrasings still
+flag.
+
 ### Fixed: egress destinations are normalised, and ones the text cannot fix are gated
 
 With `egressAllow` set, several spellings of a destination reached a host the
