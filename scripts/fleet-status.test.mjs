@@ -471,7 +471,9 @@ console.log('\n  fleet-status.yml: which events run the job for a fork');
     && !evalIf("x.y != 'q' && x.y == 'q'", { x: { y: 'q' } }));
 
   const dir = join(fileURLToPath(new URL('..', import.meta.url)), '.github', 'workflows');
-  const own = readFileSync(join(dir, 'fleet-status.yml'), 'utf8');
+  // Windows checkouts can carry CRLF; the patterns below match on \n line ends.
+  const readLf = (f) => readFileSync(join(dir, f), 'utf8').replace(/\r\n/g, '\n');
+  const own = readLf('fleet-status.yml');
   const cond = (/^    if: >-\n((?: {6}.*\n)+)/m.exec(own)?.[1] ?? '').split('\n').map((l) => l.trim()).join(' ').trim();
   const REPO = 'askalf/example';
   const FORKED = 'contributor/example';
@@ -503,7 +505,7 @@ console.log('\n  fleet-status.yml: which events run the job for a fork');
   check('no step reads the PR head ref or sha', !/(pull_request\.head\.(ref|sha)|workflow_run\.head_sha)/.test(own));
 
   let relay = '';
-  try { relay = readFileSync(join(dir, 'fleet-review-relay.yml'), 'utf8'); } catch { /* checked below */ }
+  try { relay = readLf('fleet-review-relay.yml'); } catch { /* checked below */ }
   const listed = (/^  workflow_run:\s*\n\s+workflows:\s*\[([^\]]*)\]/m.exec(own)?.[1] ?? '')
     .split(',').map((w) => w.trim().replace(/^['"]|['"]$/g, ''));
   check('the review relay is listed in workflow_run', /^name: Fleet review relay$/m.test(relay) && listed.includes('Fleet review relay'));
