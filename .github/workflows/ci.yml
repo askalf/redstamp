@@ -16,7 +16,13 @@ concurrency:
 jobs:
   test:
     name: test (${{ matrix.os }}, ${{ matrix.node }})
-    runs-on: ${{ matrix.os }}
+    # Our own code (pushes, same-repo PRs, schedules, dispatches) runs on redstamp-exec, the
+    # non-root one-job runners on our host, so the ubuntu-latest entries no longer wait on
+    # GitHub's hosted queue. A fork's PR and a Dependabot PR run code nobody here wrote, so they
+    # stay on GitHub's runners.
+    # The windows-latest entries have no runner of ours and stay on GitHub's. Both are required
+    # checks, so a hosted outage still holds our PRs on them.
+    runs-on: ${{ matrix.os != 'ubuntu-latest' && matrix.os || (github.event.pull_request && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && 'ubuntu-latest' || fromJSON('["self-hosted","redstamp-exec"]')) }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -50,7 +56,11 @@ jobs:
   # or this fails and says which side moved.
   labels:
     name: labels (manifest matches the repo)
-    runs-on: ubuntu-latest
+    # Our own code (pushes, same-repo PRs, schedules, dispatches) runs on redstamp-exec, the
+    # non-root one-job runners on our host, so this job no longer waits on GitHub's hosted queue.
+    # A fork's PR and a Dependabot PR run code nobody here wrote, so they stay on GitHub's
+    # runners. The required windows-latest test jobs above still run on GitHub's.
+    runs-on: ${{ github.event.pull_request && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && 'ubuntu-latest' || fromJSON('["self-hosted","redstamp-exec"]') }}
     timeout-minutes: 5
     permissions:
       contents: read
