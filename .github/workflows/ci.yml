@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-26.04, windows-latest]
         node: [20, 22]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,7 +32,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Type-check the declarations
-        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        if: matrix.os == 'ubuntu-26.04' && matrix.node == 22
         # typescript and @types/node come from .github/tsc's lockfile so npm ci
         # verifies their integrity hashes; the project package.json stays
         # dependency-free.
@@ -50,7 +50,7 @@ jobs:
   # or this fails and says which side moved.
   labels:
     name: labels (manifest matches the repo)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
