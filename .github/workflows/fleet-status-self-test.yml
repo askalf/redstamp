@@ -17,9 +17,9 @@ permissions: {}
 jobs:
   self-test:
     # Our own code (pushes, same-repo PRs, schedules, dispatches) runs on redstamp-exec, the
-    # non-root one-job runners on our host, so GitHub's hosted queue going down does not hold
-    # our PRs. A fork's PR and a Dependabot PR run code nobody here wrote, so they stay on
-    # GitHub's runners.
+    # non-root one-job runners on our host, so this job no longer waits on GitHub's hosted queue.
+    # A fork's PR and a Dependabot PR run code nobody here wrote, so they stay on GitHub's
+    # runners. The required windows-latest test jobs in ci.yml still run on GitHub's.
     runs-on: ${{ github.event.pull_request && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && 'ubuntu-latest' || fromJSON('["self-hosted","redstamp-exec"]') }}
     timeout-minutes: 5
     permissions:
