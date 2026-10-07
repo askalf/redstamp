@@ -20,16 +20,21 @@ jobs:
     # non-root one-job runners on our host, so the ubuntu-latest entries no longer wait on
     # GitHub's hosted queue. A fork's PR and a Dependabot PR run code nobody here wrote, so they
     # stay on GitHub's runners.
-    # The windows-latest entries have no runner of ours and stay on GitHub's. Both are required
-    # checks, so a hosted outage still holds our PRs on them.
+    # The Windows entry has no runner of ours and stays on GitHub's. It is the only place the
+    # Windows-only paths run (the daemon's named pipe, its start-up and cleanup), and it is not a
+    # required check, so a hosted outage or billing block never holds a merge on it. One Node
+    # version is enough there: the Windows paths do not vary by Node version.
     # A fork repository has no redstamp-exec runners, so every run there stays on GitHub's runners too.
     runs-on: ${{ matrix.os != 'ubuntu-latest' && matrix.os || ((github.repository != 'askalf/redstamp' || github.event.pull_request && (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]')) && 'ubuntu-latest' || fromJSON('["self-hosted","redstamp-exec"]')) }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         node: [20, 22]
+        include:
+          - os: windows-latest
+            node: 22
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
