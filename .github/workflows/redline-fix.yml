@@ -31,10 +31,14 @@ permissions:
   contents: read
   pull-requests: read
 
-# Queued, not cancelled: forge dispatches one run per review, and a cancelled run leaves no
-# artifact for it to read.
+# One group per review, so no review's run is ever cancelled. A group holds one running and
+# one pending run, and a newer dispatch cancels the pending one whatever cancel-in-progress
+# says; grouped per PR, a third review arriving while a fix runs would cancel the second's
+# pending run and leave it no artifact. Runs for the same PR may now overlap, which is safe:
+# each is pinned to the head it was dispatched for, so once one fix lands the others fail
+# their head check instead of pushing over it.
 concurrency:
-  group: fix-${{ github.repository }}-${{ inputs.pr }}
+  group: fix-${{ github.repository }}-${{ inputs.review }}
   cancel-in-progress: false
 
 jobs:
