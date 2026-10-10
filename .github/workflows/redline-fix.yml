@@ -1,0 +1,56 @@
+# Redline fix: when Redline requests changes on a pull request here, forge dispatches this run
+# with the PR, the head Redline reviewed and the review. The fix itself is computed by
+# askalf/ci (redline-fix-run.yml) on this repository's non-root exec runner and uploaded as
+# the redline-fix artifact. Nothing here pushes or comments, and no token that could is on the
+# runner: forge verifies the artifact and pushes the fix to the PR branch with its own token.
+name: Redline fix
+run-name: Redline fix ${{ github.repository }}#${{ inputs.pr }} @ ${{ inputs.head }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number.
+        required: true
+        type: string
+      head:
+        description: The full commit sha Redline reviewed. The run fails if the PR has moved past it.
+        required: true
+        type: string
+      review:
+        description: URL of the REQUEST_CHANGES review being answered.
+        required: true
+        type: string
+      dry_run:
+        description: Compute the fix and upload its diff; no commit, no bundle.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# Grouped by review URL, not by PR. A group holds one running and one pending run, and a newer
+# dispatch cancels the pending one whatever cancel-in-progress says. Keyed on the review,
+# dispatches for different reviews never cancel each other's pending runs; repeated dispatches
+# for the same review can still replace a pending run. Runs for different reviews of one PR
+# may overlap: each is pinned to the head it was dispatched for, so once one fix lands the
+# others fail their head check instead of pushing over it.
+concurrency:
+  group: fix-${{ github.repository }}-${{ inputs.review }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    # Pinned so a change to the fix workflow reaches this repo only through a reviewed bump here.
+    uses: askalf/ci/.github/workflows/redline-fix-run.yml@9e25f62cc5be1da5e98dce8cf09b282352dea8bc # main 2026-10-10, askalf/ci#37
+    with:
+      redline-ref: 9e25f62cc5be1da5e98dce8cf09b282352dea8bc
+      # redstamp-exec is this repository's ephemeral exec runner: its own non-root account, one job
+      # per registration, no credential but the fix lane's own model key.
+      runner-label: redstamp-exec
+      pr: ${{ inputs.pr }}
+      head: ${{ inputs.head }}
+      review: ${{ inputs.review }}
+      dry_run: ${{ inputs.dry_run }}
