@@ -355,6 +355,38 @@ transformers 5.10.0, a major bump llm-guard 0.3.16 does not accept. Clears
 when llm-guard bumps its transformers pin; re-check on the ignoreUntil date.
 """
 
+[[IgnoredVulns]]
+id = "PYSEC-2026-4174"
+ignoreUntil = 2026-11-16
+reason = """
+transformers 4.51.3 in the LLM Guard closure. Not bumpable: llm-guard
+0.3.16 pins transformers==4.51.3 exactly, so any other version is a different
+tool than the one under test. Remote custom generation code is cached before the
+trust_remote_code check, through GenerativePreTrainedModel.load_custom_generate.
+The arena never reaches it: the adapter builds PromptInjection, a
+text-classification pipeline that never calls generate(), and Secrets, which
+loads no model, and runs scan_prompt over a fixed corpus of shell strings. No
+custom_generate argument and no generation model exist in the arena. Patched in
+transformers 5.9.0, a major bump llm-guard 0.3.16 does not accept. Clears when
+llm-guard bumps its transformers pin; re-check on the ignoreUntil date.
+"""
+
+[[IgnoredVulns]]
+id = "GHSA-x9r9-c232-4q39"
+ignoreUntil = 2026-11-16
+reason = """
+transformers 4.51.3 in the LLM Guard closure. Not bumpable: llm-guard
+0.3.16 pins transformers==4.51.3 exactly, so any other version is a different
+tool than the one under test. Remote custom generation code is cached before the
+trust_remote_code check, through GenerativePreTrainedModel.load_custom_generate.
+The arena never reaches it: the adapter builds PromptInjection, a
+text-classification pipeline that never calls generate(), and Secrets, which
+loads no model, and runs scan_prompt over a fixed corpus of shell strings. No
+custom_generate argument and no generation model exist in the arena. Patched in
+transformers 5.9.0, a major bump llm-guard 0.3.16 does not accept. Clears when
+llm-guard bumps its transformers pin; re-check on the ignoreUntil date.
+"""
+
 # ── json-repair ─────────────────────────────────────────────────────
 [[IgnoredVulns]]
 id = "GHSA-xf7x-x43h-rpqh"
