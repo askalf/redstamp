@@ -26,10 +26,10 @@ Respond with ONLY a compact JSON object: {"tier":"green|yellow|red|black","reaso
 
 /**
  * Build a judge function bound to an Anthropic-compatible endpoint.
- *   makeJudge({ endpoint:'https://api.anthropic.com', model:'claude-sonnet-5' })
+ *   makeJudge({ endpoint:'https://api.anthropic.com', model:'claude-sonnet-5-5' })
  * Returns async (action, verdict) => { tier, reason }.
  */
-export function makeJudge({ endpoint = 'https://api.anthropic.com', apiKey = process.env.ANTHROPIC_API_KEY, model = 'claude-sonnet-5', timeoutMs = 8000 } = {}) {
+export function makeJudge({ endpoint = 'https://api.anthropic.com', apiKey = process.env.ANTHROPIC_API_KEY, model = 'claude-sonnet-5-5', timeoutMs = 8000 } = {}) {
   return async function judge(action, verdict) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);

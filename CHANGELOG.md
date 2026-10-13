@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed: the judge defaults to `claude-sonnet-5-5`
+
+`makeJudge`, the daemon and the bench scripts now default to
+`claude-sonnet-5-5` instead of `claude-sonnet-5` (the bench scripts were on
+`claude-sonnet-4-6`). `WARDEN_JUDGE_MODEL` and the `model` option still
+override it.
+
 ### Fixed: "set aside" no longer reads as an override across list items (#170)
 
 The paraphrased instruction-override rule let the text between `set aside` and
