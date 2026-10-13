@@ -17,7 +17,7 @@ const BENIGN = ['ls -la', 'docker run --rm -v $(pwd):/app node npm ci'];
 
 const judge = makeJudge({
   endpoint: process.env.WARDEN_JUDGE_ENDPOINT || 'https://api.anthropic.com',
-  model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-4-6',
+  model: process.env.WARDEN_JUDGE_MODEL || 'claude-sonnet-5-5',
   apiKey: process.env.WARDEN_JUDGE_KEY || process.env.ANTHROPIC_API_KEY,
 });
 
