@@ -99,9 +99,14 @@ function isProseAboutACommand(cmd) {
 // only when nothing else in the command routes into an interpreter.
 // The program is one quoted word: single-quoted, or double-quoted with its escapes.
 const INLINE_INTERP_G = /\|\s*(python[0-9.]*|node)\s+((?:-[A-Za-z]{1,3}\s+){0,4})(?:-c|-e|-p|--eval|--print)\s+(?:"((?:[^"\\]|\\[\s\S]){1,4000})"|'([^']{1,4000})')/gi;
-// Python: builtins that run or reach code, any dunder, and imports outside a short
-// list of data-only modules (a module such as pdb, timeit or cProfile runs a string).
-const PY_EVALS = /\b(?:exec|eval|compile|execfile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input|open|help|memoryview)\b|__/;
+// Python: builtins that run or reach code, any dunder, imports outside a short list of
+// data-only modules (a module such as pdb, timeit or cProfile runs a string), and every
+// route to an already-loaded module or a frame's globals that needs no import: `sys.modules`
+// holds `os` at startup, `operator.attrgetter`/`methodcaller` and `string.Formatter().get_field`
+// reach attributes by string, and a traceback or generator frame leads to `f_globals`. An
+// allowed module can hold `os` as an attribute (`uuid.os`, `random._os` under statistics),
+// so the names that spawn are refused wherever they appear.
+const PY_EVALS = /\b(?:exec\w*|eval|compile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input|open|help|memoryview|modules|meta_path|path_hooks|path_importer_cache|builtins|_getframe|settrace|setprofile|addaudithook|excepthook|displayhook|breakpointhook|unraisablehook|exc_info|exception|last_traceback|last_exc|tb_frame|tb_next|f_globals|f_locals|f_builtins|f_back|gi_frame|cr_frame|ag_frame|attrgetter|methodcaller|Formatter|get_field|vformat|os|_os|posix|nt|system|popen\w*|spawn\w*|fork\w*|subprocess|ctypes|platform)\b|__/;
 const PY_SAFE_MODULES = new Set(['sys', 'json', 'csv', 're', 'math', 'statistics', 'datetime', 'time', 'collections', 'itertools', 'functools', 'operator', 'string', 'textwrap', 'hashlib', 'decimal', 'fractions', 'pprint', 'unicodedata', 'urllib.parse', 'ipaddress', 'uuid']);
 const pyImportsSafe = (code) => {
   for (const m of code.matchAll(/\bfrom\s+([\w.]+)\s+import\b|\bimport\s+([\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)/g)) {
@@ -110,9 +115,10 @@ const pyImportsSafe = (code) => {
   }
   return true;
 };
-// Node: anything that evaluates, loads or spawns, computed property access, and any
-// part of `process` beyond its streams, argv, env and exit.
-const JS_EVALS = /\b(?:eval|Function|require|import|vm|child_process|constructor|globalThis|global|Reflect|Proxy|module|exports|setTimeout|setInterval|setImmediate|queueMicrotask|fs|spawn|exec|execSync|execve|Worker|WebAssembly|Bun|Deno)\b|\[\s*['"`]|\bprocess\s*\.\s*(?!(?:stdin|stdout|stderr|argv|env|exit|exitCode)\b)\w/;
+// Node: anything that evaluates, loads or spawns, computed property access, any part of
+// `process` beyond its streams, argv, env and exit, and `this`, which in `node -e` is the
+// global object (`this[k]` with a built-up name reaches eval).
+const JS_EVALS = /\b(?:eval|Function|require|import|vm|child_process|constructor|globalThis|global|this|Reflect|Proxy|module|exports|setTimeout|setInterval|setImmediate|queueMicrotask|fs|spawn|exec|execSync|execve|Worker|WebAssembly|Bun|Deno)\b|\[\s*['"`]|\bprocess\s*\.\s*(?!(?:stdin|stdout|stderr|argv|env|exit|exitCode)\b)\w/;
 const inlineIsData = (interp, code) =>
   /^python/i.test(interp) ? !PY_EVALS.test(code) && pyImportsSafe(code) : !JS_EVALS.test(code);
 function pipesOnlyIntoInlineData(cmd) {
