@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-### Fixed: heredocs that execute, and downloads read as data
+### Fixed: heredocs that execute
 
 - **An unquoted heredoc's substitutions are seen.** A heredoc with an unquoted
   delimiter expands `$(…)` and backticks in its body, so a text write whose body
@@ -14,12 +14,8 @@
   notes.md <<'EOF' … EOF`, then `echo saved`, documents a command; a chain whose
   other clauses could run what was written (an interpreter, `./x`, `. x`,
   `source`, `chmod`, `exec`, a pipe) stays black.
-- **A download parsed by an inline Python program is not RCE.**
-  `curl … | python3 -c "import sys,json; …"` reads the response as data. The
-  exemption holds only for a program with no evaluating, importing (beyond a short
-  list of data modules), opening or spawning primitive, given as one quoted word
-  with no shell expansion, and only when nothing else in the command routes into
-  an interpreter. Node, shells, Perl, Ruby and PHP are not exempt.
+- A download piped into an interpreter stays black even when its inline program
+  only looks like it parses data; a text check cannot tell what it will run.
 
 ### Changed: the judge defaults to `claude-sonnet-5-5`
 

