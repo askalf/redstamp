@@ -80,6 +80,9 @@ const INTERP_WORD_RE = /\b(?:(?:ba)?sh|zsh|dash|ash|ksh|python[0-9.]*|node|ruby|
 // Siblings move around, print or check; none can run a file or read text as a program.
 const PROSE_SIBLING_RE = /^\s*(?:cd|pwd|ls|mkdir|echo|printf|true|date|wc|test|\[)(?:\s|$)/;
 function isProseAboutACommand(cmd) {
+  // A command substitution anywhere can execute however it is quoted or laid out (a heredoc
+  // body, a double-quoted span), so prose that holds one is never exempt.
+  if (/\$\(|`/.test(String(cmd))) return false;
   const skel = shellSkeleton(cmd);
   if (PIPE_INTERP.test(skel)) return false;    // shape outside quotes → real pipeline
   if (INTERP_WORD_RE.test(skel)) return false; // interpreter in command position
