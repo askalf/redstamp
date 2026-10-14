@@ -90,15 +90,14 @@ function isProseAboutACommand(cmd) {
     clauses.every((c) => TEXT_SINK_RE.test(c) || PROSE_SIBLING_RE.test(c));
 }
 
-// A download piped into a language interpreter that is given its program INLINE
-// (`python3 -c "…"`, `node -e "…"`) reads the download as DATA: parsing a JSON
-// API response is the everyday case. It is remote code execution only when the
-// inline program runs what it reads, so the exemption holds only for Python and
-// Node, only when the inline code uses no primitive that evaluates, imports,
-// opens or spawns (exec, eval, getattr, __import__, require, Function, …), and
-// only when nothing else in the command routes into an interpreter.
+// A download piped into Python given its program INLINE (`python3 -c "…"`) reads the
+// download as DATA: parsing a JSON API response is the everyday case. It is remote code
+// execution only when the inline program runs what it reads, so the exemption holds only
+// when the inline code uses no primitive that evaluates, imports, opens or spawns, and only
+// when nothing else in the command routes into an interpreter. Node is not exempt: its
+// computed property access reaches code from data too easily to tell apart by text.
 // The program is one quoted word: single-quoted, or double-quoted with its escapes.
-const INLINE_INTERP_G = /\|\s*(python[0-9.]*|node)\s+((?:-[A-Za-z]{1,3}\s+){0,4})(?:-c|-e|-p|--eval|--print)\s+(?:"((?:[^"\\]|\\[\s\S]){1,4000})"|'([^']{1,4000})')/gi;
+const INLINE_INTERP_G = /\|\s*(python[0-9.]*)\s+((?:-[A-Za-z]{1,3}\s+){0,4})(?:-c)\s+(?:"((?:[^"\\]|\\[\s\S]){1,4000})"|'([^']{1,4000})')/gi;
 // Python: builtins that run or reach code, any dunder, imports outside a short list of
 // data-only modules (a module such as pdb, timeit or cProfile runs a string), and every
 // route to an already-loaded module or a frame's globals that needs no import: `sys.modules`
@@ -115,12 +114,7 @@ const pyImportsSafe = (code) => {
   }
   return true;
 };
-// Node: anything that evaluates, loads or spawns, computed property access, any part of
-// `process` beyond its streams, argv, env and exit, and `this`, which in `node -e` is the
-// global object (`this[k]` with a built-up name reaches eval).
-const JS_EVALS = /\b(?:eval|Function|require|import|vm|child_process|constructor|globalThis|global|this|Reflect|Proxy|module|exports|setTimeout|setInterval|setImmediate|queueMicrotask|fs|spawn|exec|execSync|execve|Worker|WebAssembly|Bun|Deno)\b|\[\s*['"`]|\bprocess\s*\.\s*(?!(?:stdin|stdout|stderr|argv|env|exit|exitCode)\b)\w/;
-const inlineIsData = (interp, code) =>
-  /^python/i.test(interp) ? !PY_EVALS.test(code) && pyImportsSafe(code) : !JS_EVALS.test(code);
+const inlineIsData = (_interp, code) => !PY_EVALS.test(code) && pyImportsSafe(code);
 function pipesOnlyIntoInlineData(cmd) {
   let found = false;
   const rest = String(cmd).replace(INLINE_INTERP_G, (m, interp, _flags, dq, sq) => {
