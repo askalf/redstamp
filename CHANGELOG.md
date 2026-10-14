@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Fixed: heredocs that execute, and downloads read as data
+
+- **An unquoted heredoc's substitutions are seen.** A heredoc with an unquoted
+  delimiter expands `$(…)` and backticks in its body, so a text write whose body
+  holds `$(curl … | bash)` runs that pipeline. The prose exemption blanked every
+  heredoc body and rated it green; such a body now stays visible to the rules.
+- **The heredoc's opening line is read.** Whatever follows the delimiter on its
+  own line (`cat <<'EOF' | sh`) is shell, not body, and was being blanked with it.
+- **Prose in a quoted heredoc inside a plain chain is not RCE.** `cd dir && cat >>
+  notes.md <<'EOF' … EOF`, then `echo saved`, documents a command; a chain whose
+  other clauses could run what was written (an interpreter, `./x`, `. x`,
+  `source`, `chmod`, `exec`, a pipe) stays black.
+- **A download parsed by an inline Python or Node program is not RCE.**
+  `curl … | python3 -c "import sys,json; …"` reads the response as data. The
+  exemption holds only for a program with no evaluating, importing (beyond a short
+  list of data modules), opening or spawning primitive, given as one quoted word
+  with no shell expansion, and only when nothing else in the command routes into
+  an interpreter. Shells, Perl, Ruby and PHP are not exempt.
+
 ### Changed: the judge defaults to `claude-sonnet-5-5`
 
 `makeJudge`, the daemon and the bench scripts now default to

