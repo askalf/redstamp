@@ -88,7 +88,9 @@ function isProseAboutACommand(cmd) {
   if (INTERP_WORD_RE.test(skel)) return false; // interpreter in command position
   if (/(?:^|[^|])\|(?!\|)/.test(skel)) return false; // a pipe → the text may be fed to something
   if (/(?:^|[\s;&(])\.\s+\S|\.\/|\bchmod\b|\bexec\b/.test(skel)) return false; // runs a file
-  const clauses = skel.split(/&&|\|\||;|\n/).map((c) => c.trim()).filter(Boolean);
+  // A lone `&` backgrounds one command and starts the next, so it separates clauses too
+  // (`true & $SHELL x.sh`); `>&`, `&>` and `&&` are not that operator.
+  const clauses = skel.split(/&&|\|\||;|\n|(?<![<>&])&(?![&>])/).map((c) => c.trim()).filter(Boolean);
   return clauses.some((c) => TEXT_SINK_RE.test(c)) &&
     clauses.every((c) => TEXT_SINK_RE.test(c) || PROSE_SIBLING_RE.test(c));
 }
