@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed: heredocs that execute
+
+- **An unquoted heredoc's substitutions are seen.** A heredoc with an unquoted
+  delimiter expands `$(…)` and backticks in its body, so a text write whose body
+  holds `$(curl … | bash)` runs that pipeline. The prose exemption blanked every
+  heredoc body and rated it green; such a body now stays visible to the rules.
+- **The heredoc's opening line is read.** Whatever follows the delimiter on its
+  own line (`cat <<'EOF' | sh`) is shell, not body, and was being blanked with it.
+- **Prose in a quoted heredoc inside a plain chain is not RCE.** `cd dir && cat >>
+  notes.md <<'EOF' … EOF`, then `echo saved`, documents a command; a chain whose
+  other clauses could run what was written (an interpreter, `./x`, `. x`,
+  `source`, `chmod`, `exec`, a pipe) stays black.
+- A download piped into an interpreter stays black even when its inline program
+  only looks like it parses data; a text check cannot tell what it will run.
+
 ### Changed: the judge defaults to `claude-sonnet-5-5`
 
 `makeJudge`, the daemon and the bench scripts now default to

