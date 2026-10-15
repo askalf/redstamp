@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-15
+
 ### Fixed: heredocs that execute
 
 - **An unquoted heredoc's substitutions are seen.** A heredoc with an unquoted

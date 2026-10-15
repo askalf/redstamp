@@ -1,6 +1,6 @@
 {
   "name": "@askalf/redstamp",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A deterministic, offline firewall for AI agent tool calls: risk tiers, policy, secret-exfil and prompt-injection defense, cross-call taint tracking, tamper-evident audit, and MCP middleware. No model in the decision path; zero runtime dependencies.",
   "type": "module",
   "exports": {
