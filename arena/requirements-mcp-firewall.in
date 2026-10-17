@@ -2,7 +2,9 @@
 # at the arena-pinned commit 5f01d8b66480cdc2b7c7a6850e239e4d0f65df07.
 # mcp-firewall itself is installed separately (--no-deps, editable, commit-pinned).
 # Recompile: pip-compile --generate-hashes --strip-extras requirements-mcp-firewall.in
-mcp>=1.0
+# Floor above upstream: 1.30.0 fixes unbounded StreamableHTTP session accumulation
+# (GHSA-84m7-p3x7-pcfv); below 2 because mcp-firewall is written against the 1.x API.
+mcp>=1.30.0,<2
 click>=8.1
 rich>=13.0
 pydantic>=2.0
