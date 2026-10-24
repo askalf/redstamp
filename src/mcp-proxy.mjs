@@ -46,10 +46,11 @@ export function inspectClientLine(line, state, policy, opts = {}) {
     // call 1, then that file shipped out on call 2 — is caught. The session can
     // only RAISE risk, never lower, so this is at least as safe as the stateless
     // check. `--no-taint` leaves state.taint null and falls back to check().
-    let v;
-    if (state.taint) { v = state.taint.check(action); recordVerdict(opts.audit, action, v); }
-    else v = check(action, policy, { audit: opts.audit });
+    const v = state.taint ? state.taint.check(action) : check(action, policy);
     const blocked = v.decision === 'block' || (v.decision === 'approve' && !opts.allowApprove);
+    // The record says what the proxy did, not only the verdict: an approve-tier
+    // call is refused here unless --allow-approve is set.
+    recordVerdict(opts.audit, action, v, { enforced: blocked ? 'blocked' : 'forwarded' });
     if (blocked) {
       opts.onWarn?.(`blocked ${name} (${v.tier}): ${v.why.join('; ')}`);
       const hint = v.decision === 'approve' ? ' — add an allow rule to redstamp.config.json to permit it.' : '';

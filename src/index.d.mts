@@ -21,8 +21,8 @@ export declare function resolveConfig(explicit?: string | null, dir?: string): s
 /** Deterministic verdict for an action. No I/O, no LLM: pure and offline. */
 export declare function decide(action: Action, policy?: Policy, skillText?: string): Verdict;
 
-/** Append a verdict to an audit sink. A null sink is a no-op. */
-export declare function recordVerdict(audit: AuditSink | null | undefined, action: Action, v: Verdict): unknown;
+/** Append a verdict to an audit sink, with `extra` fields (e.g. `{ enforced }`) when the host acted on it. A null sink is a no-op. */
+export declare function recordVerdict(audit: AuditSink | null | undefined, action: Action, v: Verdict, extra?: Record<string, unknown>): unknown;
 
 export interface CheckOptions {
   audit?: AuditSink | null;

@@ -3,8 +3,12 @@
 // audit, hot-reloads policy on file change, and (optionally) runs the judge tier.
 //
 // Two request shapes, one handler:
-//   { action, skillText }            -> verdict JSON   (node library client)
+//   { action, skillText, enforce? }  -> verdict JSON   (node library client;
+//                                       the node hook adds `enforce`)
 //   { tool_name, tool_input, ... }   -> raw hook bytes (native fast client)
+//   { invoked }                      -> { recorded }   (node hook, PostToolUse)
+// A raw PostToolUse payload is recorded as an invocation and answered with an
+// empty line.
 // The cc-hook shape lets the compiled `warden-fast` binary stay a dumb byte
 // pipe: it forwards Claude Code's hook stdin verbatim and writes back whatever
 // the daemon returns. All mapping/classification/formatting stays here in JS.
@@ -17,7 +21,7 @@ import { TaintSession } from './taint.mjs';
 import { ChainedFileAudit } from './audit.mjs';
 import { loadPolicy } from './policy.mjs';
 import { wardenSocket, wardenInfoFile } from './client.mjs';
-import { ccToAction, verdictToHook } from './cc-hook.mjs';
+import { ccToAction, verdictToHook, enforcedBy, hookRef, invocationRecord, INVOKED_EVENTS } from './cc-hook.mjs';
 
 // Exact bytes a PreToolUse hook should print on stdout for a verdict.
 // deny/ask -> a hookSpecificOutput object; defer/allow -> nothing.
@@ -96,7 +100,22 @@ export function startDaemon({
           sock.write(JSON.stringify({ served, pid: process.pid }) + '\n'); continue;
         }
 
+        // A PostToolUse payload (raw from the fast client, or { invoked } from the
+        // node hook) says the call ran. It is recorded, never classified, so it
+        // can't feed the taint session. The raw shape gets an empty line, like a defer.
+        const post = isHook && INVOKED_EVENTS.has(req.hook_event_name);
+        if (post || (req.invoked && typeof req.invoked === 'object')) {
+          const rec = invocationRecord(post ? req : req.invoked);
+          const recorded = !!(fileAudit && rec.tool_use_id);
+          if (recorded) fileAudit.record({ ts: new Date().toISOString(), ...rec, via: 'cc-hook' });
+          sock.write((post ? '' : JSON.stringify({ recorded })) + '\n'); continue;
+        }
+
         const action = isHook ? ccToAction(req.tool_name, req.tool_input || {}) : req.action;
+        // What the hook will do with the verdict. The raw hook shape is answered
+        // with the daemon's own strict setting; the node hook states its own.
+        const enforce = isHook ? { strict: !!(policy && policy.strict), ...hookRef(req) }
+          : req.enforce && typeof req.enforce === 'object' ? { strict: !!req.enforce.strict, ...hookRef(req.enforce) } : null;
 
         try {
           const v = judge
@@ -107,9 +126,10 @@ export function startDaemon({
           served++;
           if (fileAudit) fileAudit.record({
             ts: new Date().toISOString(), tool: action && action.tool, tier: v.tier,
-            decision: v.decision, why: v.why, via: isHook ? 'cc-hook' : 'action',
+            decision: v.decision, why: v.why, via: enforce ? 'cc-hook' : 'action',
+            ...(enforce && { enforced: enforcedBy(verdictToHook(v, enforce.strict).kind), ...hookRef(enforce) }),
           });
-          if (isHook) sock.write(hookStdout(v, !!(policy && policy.strict)) + '\n');
+          if (isHook) sock.write(hookStdout(v, enforce.strict) + '\n');
           else sock.write(JSON.stringify(v) + '\n');
         } catch (e) {
           // Hook path fails open (empty -> defer); action path returns the error.

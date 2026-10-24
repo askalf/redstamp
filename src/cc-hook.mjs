@@ -34,7 +34,26 @@ export function verdictToHook(verdict, strict) {
   return { kind: 'defer' };
 }
 
-const out = (permissionDecision, reason) =>
+/** What the hook did with a verdict, as the audit records it: deny -> blocked, ask -> asked, defer -> forwarded (to Claude Code's own permission rules). */
+export const enforcedBy = (kind) => (kind === 'deny' ? 'blocked' : kind === 'ask' ? 'asked' : 'forwarded');
+
+/** The ids that join a PreToolUse verdict to the PostToolUse record of the same call. Only string ids are kept. */
+export function hookRef(p = {}) {
+  const ref = {};
+  if (typeof p.tool_use_id === 'string' && p.tool_use_id) ref.tool_use_id = p.tool_use_id;
+  if (typeof p.session_id === 'string' && p.session_id) ref.session_id = p.session_id;
+  return ref;
+}
+
+/** Hook events that mean the tool ran: PostToolUse after a success, PostToolUseFailure after an error. */
+export const INVOKED_EVENTS = new Set(['PostToolUse', 'PostToolUseFailure']);
+
+/** The audit record for a PostToolUse payload: the call ran, observed rather than inferred. */
+export function invocationRecord(p = {}) {
+  return { event: 'invoked', tool: ccToAction(p.tool_name, {}).tool, result: p.hook_event_name === 'PostToolUseFailure' ? 'error' : 'ok', ...hookRef(p) };
+}
+
+const out =(permissionDecision, reason) =>
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision, permissionDecisionReason: reason } }));
 
 function readStdin() {
@@ -53,20 +72,35 @@ async function main() {
   const AUDIT = process.env.WARDEN_AUDIT || path.join(HOME, '.warden', 'audit.jsonl');
   let payload;
   try { payload = JSON.parse((await readStdin()) || '{}'); } catch { process.exit(0); } // fail-open
+  const append = (rec) => {
+    try { fs.mkdirSync(path.dirname(AUDIT), { recursive: true }); fs.appendFileSync(AUDIT, JSON.stringify({ ts: new Date().toISOString(), ...rec }) + '\n'); } catch {}
+  };
   try {
+    // Registered for PostToolUse too: record that the call ran, joined to its
+    // verdict by tool_use_id. The daemon writes it to the same chained log as the
+    // verdict; with no daemon it goes beside the fallback verdicts. Nothing to say
+    // to Claude Code, so nothing on stdout.
+    if (INVOKED_EVENTS.has(payload.hook_event_name)) {
+      const rec = invocationRecord(payload);
+      // Only the ids go to the daemon: tool_response can be larger than its frame cap.
+      const { tool_name, hook_event_name, tool_use_id, session_id } = payload;
+      if (rec.tool_use_id && !(await daemonCheck({ invoked: { tool_name, hook_event_name, tool_use_id, session_id } }, { timeoutMs: 1500 }))) append(rec);
+      process.exit(0);
+    }
     const policy = loadPolicy(CFG);
     const strict = policy.strict || !!process.env.WARDEN_STRICT;
     const action = ccToAction(payload.tool_name, payload.tool_input || {});
     // Long read timeout: a daemon with the judge tier may think for seconds on a
     // gray command. Connect still fails fast (daemon down -> in-process fallback).
     const readMs = Number(process.env.WARDEN_READ_MS) || 15000;
-    let v = await daemonCheck({ action, skillText: '' }, { timeoutMs: readMs }); // fast path (daemon also audits)
+    // `enforce` tells the daemon what this hook will do with the verdict (strict
+    // decides ask vs defer), so its audit record carries `enforced` and the ids.
+    const enforce = { strict, ...hookRef(payload) };
+    let v = await daemonCheck({ action, skillText: '', enforce }, { timeoutMs: readMs }); // fast path (daemon also audits)
     const auditedByDaemon = !!v;
     if (!v) { const { check } = await import('./index.mjs'); v = check(action, policy, {}); } // fallback
-    if (!auditedByDaemon) {
-      try { fs.mkdirSync(path.dirname(AUDIT), { recursive: true }); fs.appendFileSync(AUDIT, JSON.stringify({ ts: new Date().toISOString(), tool: payload.tool_name, tier: v.tier, decision: v.decision, why: v.why }) + '\n'); } catch {}
-    }
     const d = verdictToHook(v, strict);
+    if (!auditedByDaemon) append({ tool: payload.tool_name, tier: v.tier, decision: v.decision, why: v.why, enforced: enforcedBy(d.kind), ...hookRef(payload) });
     if (d.kind === 'deny') out('deny', d.reason);
     else if (d.kind === 'ask') out('ask', d.reason);
     process.exit(0);
