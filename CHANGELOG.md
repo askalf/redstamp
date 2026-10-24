@@ -13,9 +13,10 @@ and otherwise the hook defers to Claude Code's own rules.
   or its in-process fallback). Hook records also carry `tool_use_id` and
   `session_id`. Older records, and library calls with no host, have no field and
   read as before.
-- **`redstamp-hook` as a `PostToolUse` hook** records `{ event: "invoked",
-  result }` joined by `tool_use_id`, so "the tool ran" is observed. The daemon
-  writes it to the same hash chain and never classifies it.
+- **`redstamp-hook` as a `PostToolUse` and `PostToolUseFailure` hook** records
+  `{ event: "invoked", result }` (`ok`, or `error` from the failure event)
+  joined by `tool_use_id`, so "the tool ran" is observed. The daemon writes it
+  to the same hash chain and never classifies it.
 - **`invocationOf(verdict, records, { windowComplete })`** in
   `@askalf/redstamp/audit` reads that evidence: `not-invoked` only for a blocked
   call or a complete window, and `unknown` for conflicting records.
