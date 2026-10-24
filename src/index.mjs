@@ -179,8 +179,10 @@ export function decide(action, policy = DEFAULT_POLICY, skillText = '') {
   return { tool: action.tool, tier, decision, why, externalHosts, gray: decision === 'approve' || tier === TIER.YELLOW || smells.length > 0 };
 }
 
-export const recordVerdict = (audit, action, v) =>
-  audit && audit.record({ ts: new Date().toISOString(), tool: action.tool, input: action.input, tier: v.tier, decision: v.decision, why: v.why });
+// `extra` carries what the host did with the verdict (`enforced`, see audit.mjs).
+// Omitted, the record is byte-identical to before.
+export const recordVerdict = (audit, action, v, extra) =>
+  audit && audit.record({ ts: new Date().toISOString(), tool: action.tool, input: action.input, tier: v.tier, decision: v.decision, why: v.why, ...extra });
 
 /** Sync deterministic check (optionally records to an AuditLog). */
 export function check(action, policy = DEFAULT_POLICY, { audit = null, skillText = '' } = {}) {

@@ -18,7 +18,7 @@ Every command is also available under its legacy `warden*` name (`warden`, `ward
 
 ## Wiring the Claude Code hook
 
-`redstamp-hook` is the binary you point Claude Code at. Add it as a `PreToolUse` hook in `~/.claude/settings.json`:
+`redstamp-hook` is the binary you point Claude Code at. Add it as a `PreToolUse` hook in `~/.claude/settings.json`, and as a `PostToolUse` and a `PostToolUseFailure` hook with the same matcher if you want the audit to show which calls ran (Claude Code sends a failed call only to `PostToolUseFailure`, so without it a call that ran and failed leaves no record):
 
 ```json
 {
@@ -28,10 +28,34 @@ Every command is also available under its legacy `warden*` name (`warden`, `ward
         "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|WebFetch",
         "hooks": [{ "type": "command", "command": "redstamp-hook", "timeout": 15 }]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|WebFetch",
+        "hooks": [{ "type": "command", "command": "redstamp-hook", "timeout": 5 }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|WebFetch",
+        "hooks": [{ "type": "command", "command": "redstamp-hook", "timeout": 5 }]
+      }
     ]
   }
 }
 ```
+
+### What the audit records
+
+Each verdict a host acts on records what the host did with it, in `enforced`:
+
+| `enforced` | written by | meaning |
+|---|---|---|
+| `blocked` | `redstamp-mcp`, `redstamp-hook` | the call was refused: a block, an approve-tier call in the proxy without `--allow-approve`, or a hook deny |
+| `asked` | `redstamp-hook` | strict mode asked the user; the answer never reaches redstamp |
+| `forwarded` | `redstamp-mcp`, `redstamp-hook` | the call was passed on; after a hook defer, Claude Code's own permission rules still apply |
+
+Hook records also carry Claude Code's `tool_use_id` and `session_id`. With both post hooks registered, a call that ran adds `{ "event": "invoked", "result": "ok" }` (`"error"` for `PostToolUseFailure`) with the same `tool_use_id`, so whether an asked call ran is observed, not inferred. `invocationOf(verdict, records, { windowComplete })` from `@askalf/redstamp/audit` joins them: it reports `not-invoked` only for a blocked call or when you vouch the records cover the whole window, and `unknown` when records for the same call conflict. Records written before this field, and records from library calls with no host, have no `enforced` and read as before.
 
 A `block` verdict denies the call with the reason; with `strict: true` in your policy (or `WARDEN_STRICT=1`), red-tier calls additionally prompt instead of passing silently. The hook is **fail-open by construction** — a malformed payload or an internal error exits 0 rather than wedging your tooling.
 

@@ -46,3 +46,22 @@ export type VerifyResult =
 
 /** Verify a JSONL audit file's chain, and its checkpoint when one exists. */
 export declare function verifyAuditFile(path: string, expected?: ChainState | null): VerifyResult;
+
+/** What the host did with a verdict, written on the verdict record by the host that acted on it. */
+export type Enforced = 'blocked' | 'asked' | 'forwarded';
+
+export type Invocation =
+  | { status: 'invoked'; result: 'ok' | 'error' | 'unknown' }
+  | { status: 'not-invoked' }
+  | { status: 'unknown'; reason: string };
+
+/**
+ * Whether the call behind a verdict record ran, from the records beside it (joined by
+ * `tool_use_id`). `windowComplete`: the records cover the whole window the call could have
+ * run in, so a missing invocation record means it did not run. Conflicting records read as unknown.
+ */
+export declare function invocationOf(
+  verdict: Record<string, unknown>,
+  records?: ReadonlyArray<Record<string, unknown>>,
+  opts?: { windowComplete?: boolean },
+): Invocation;

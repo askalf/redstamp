@@ -192,3 +192,51 @@ export function verifyAuditFile(path, expected = readCheckpoint(path)) {
   }
   return unchained ? { ok: true, entries: n, unchained } : { ok: true, entries: n };
 }
+
+// What happened to a call after its verdict. A verdict record from a host that
+// acted on it carries `enforced`:
+//   blocked    the host refused the call (mcp-proxy block, or approve without
+//              --allow-approve; redstamp-hook deny)
+//   asked      redstamp-hook in strict mode asked the user; the answer never
+//              reaches redstamp
+//   forwarded  the host passed the call on (mcp-proxy forward; redstamp-hook
+//              defer, where Claude Code's own permission rules still apply)
+// Records from before the field, or from a library caller that is not a host,
+// have no `enforced` and read as before.
+//
+// redstamp-hook registered for PostToolUse also writes { event: 'invoked',
+// result: 'ok' | 'error', tool_use_id, session_id }, joined to the PreToolUse
+// verdict by tool_use_id, so "the tool ran" is observed rather than inferred.
+//
+// invocationOf(verdict, records, { windowComplete }) reads that evidence:
+//   { status: 'invoked', result }  an invocation record joins the verdict
+//   { status: 'not-invoked' }      the host blocked it, or the caller vouches the
+//                                  records cover the whole window the call could
+//                                  have run in and no invocation joins it
+//   { status: 'unknown', reason }  anything else, including conflicting records
+//                                  for the same call (two enforcements, two
+//                                  results, a different session, or a blocked
+//                                  call observed running): conflicts fail closed
+export function invocationOf(verdict, records = [], { windowComplete = false } = {}) {
+  const unknown = (reason) => ({ status: 'unknown', reason });
+  const id = verdict && verdict.tool_use_id;
+  if (typeof id !== 'string' || !id) {
+    return verdict && verdict.enforced === 'blocked' ? { status: 'not-invoked' } : unknown('no tool_use_id to join on');
+  }
+  const same = records.filter((r) => r && r.tool_use_id === id);
+  if (same.some((r) => r.session_id !== undefined && verdict.session_id !== undefined && r.session_id !== verdict.session_id)) {
+    return unknown('conflicting records: a different session_id');
+  }
+  const verdicts = same.filter((r) => r.event === undefined && r.decision !== undefined);
+  if (!verdicts.includes(verdict)) verdicts.push(verdict);
+  if (new Set(verdicts.map((r) => r.enforced ?? 'unrecorded')).size > 1) return unknown('conflicting records: different enforcement');
+  const invoked = same.filter((r) => r.event === 'invoked');
+  if (invoked.length) {
+    if (verdict.enforced === 'blocked') return unknown('conflicting records: a blocked call observed running');
+    const results = new Set(invoked.map((r) => r.result ?? 'unknown'));
+    if (results.size > 1) return unknown('conflicting records: different results');
+    return { status: 'invoked', result: [...results][0] };
+  }
+  if (verdict.enforced === 'blocked') return { status: 'not-invoked' };
+  return windowComplete ? { status: 'not-invoked' } : unknown('no invocation record in an incomplete window');
+}
