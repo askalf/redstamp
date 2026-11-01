@@ -10,6 +10,7 @@ Same call → same verdict, every time. No model in the decision path. Zero runt
 
 [![release](https://img.shields.io/github/v/release/askalf/redstamp?logo=github)](https://github.com/askalf/redstamp/releases/latest)
 [![ci](https://github.com/askalf/redstamp/actions/workflows/ci.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/ci.yml)
+[![CI on pitlane](https://img.shields.io/endpoint?url=https%3A%2F%2Fpitlane.askalf.org%2Fbadge.json)](https://pitlane.askalf.org/)
 [![CodeQL](https://github.com/askalf/redstamp/actions/workflows/codeql.yml/badge.svg)](https://github.com/askalf/redstamp/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/askalf/redstamp/badge)](https://scorecard.dev/viewer/?uri=github.com/askalf/redstamp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14489/badge)](https://www.bestpractices.dev/projects/14489)
