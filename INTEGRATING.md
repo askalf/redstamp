@@ -27,7 +27,7 @@ await safeShell('rm -rf /');   // throws WardenBlocked (black)
 ```
 **`agent` specifically:** it exports `validateInput` from `security.js`. Either wrap the exec path with `guardExecutor`, or call `check(action, policy)` inside `validateInput` and reject on `decision === 'block'`.
 
-## 3. Anthropic-SDK tool loops (hands SDK mode, the platform forge) — `guardToolUse`
+## 3. Anthropic-SDK tool loops (hands SDK mode, the platform's agent runtime): `guardToolUse`
 Before dispatching each `tool_use` block from the model:
 ```js
 import { guardToolUse } from '@askalf/redstamp/wrap';
