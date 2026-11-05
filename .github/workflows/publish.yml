@@ -44,7 +44,7 @@ jobs:
       contents: read
       id-token: write # OIDC trusted-publisher auth for npm publish
     steps:
-      - uses: askalf/ci/actions/checkout-with-retry@0aa81d58c7d5350efdb7e79dc602b4a3f3060e41 # main 2026-11-05, askalf/ci#178
+      - uses: askalf/ci/actions/checkout-with-retry@78fffcd9ce52e62e63bf30d57f5a05583497bf7e # main 2026-11-05, askalf/ci#181
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Trusted publishing (OIDC) needs npm >=11.5.1; Node 24 bundles npm 11.
