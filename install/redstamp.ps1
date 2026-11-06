@@ -1,52 +1,42 @@
 # redstamp - own your agent security - https://github.com/askalf/redstamp
 #
-# Installs the redstamp CLI globally from the signed GitHub release tarball,
-# after verifying its Sigstore provenance. Same steps, by hand:
+# Installs the redstamp CLI globally from the signed GitHub release tarball. The tarball is
+# downloaded, its provenance is checked with gh, and only that checked file reaches npm: a failed
+# check installs nothing. The same steps by hand:
 #   gh release download --repo askalf/redstamp --pattern 'redstamp.tgz*'
 #   gh attestation verify redstamp.tgz --repo askalf/redstamp --bundle redstamp.tgz.sigstore.json
 #   npm i -g ./redstamp.tgz
 $ErrorActionPreference = 'Stop'
 
-$repo = 'askalf/redstamp'
+$base = 'https://github.com/askalf/redstamp/releases/latest/download'
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-  Write-Host 'redstamp needs Node.js >= 20 (npm not found) - https://nodejs.org'
-  exit 1
+  throw 'redstamp needs Node.js >= 20 (npm not found) - https://nodejs.org'
 }
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-  Write-Host 'redstamp needs the GitHub CLI to verify provenance (gh not found) - https://cli.github.com'
-  exit 1
+  throw "redstamp checks the release's provenance with the GitHub CLI (gh not found) - https://cli.github.com"
 }
 
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('redstamp-' + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $tmp | Out-Null
-$tgz = Join-Path $tmp 'redstamp.tgz'
-$bundle = Join-Path $tmp 'redstamp.tgz.sigstore.json'
-
-# Native commands do not stop on a nonzero exit under $ErrorActionPreference,
-# so every one is checked through $LASTEXITCODE before the next step runs.
-$failed = $null
+$dir = Join-Path ([IO.Path]::GetTempPath()) ('redstamp-' + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $dir | Out-Null
 try {
-  Write-Host "downloading redstamp.tgz from the latest $repo release"
-  gh release download --repo $repo --pattern redstamp.tgz --pattern redstamp.tgz.sigstore.json --dir $tmp
-  if ($LASTEXITCODE -ne 0) { throw 'downloading the release assets failed' }
+  $tgz = Join-Path $dir 'redstamp.tgz'
+  $bundle = "$tgz.sigstore.json"
 
-  # Nothing is installed unless the tarball was built and signed by this repo.
-  gh attestation verify $tgz --repo $repo --bundle $bundle
-  if ($LASTEXITCODE -ne 0) { throw 'provenance verification failed - not installing' }
+  Write-Host "downloading redstamp from $base"
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/redstamp.tgz" -OutFile $tgz
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/redstamp.tgz.sigstore.json" -OutFile $bundle
+
+  # A native command's exit status never stops the script on its own, so each one is checked here.
+  Write-Host 'checking its provenance'
+  gh attestation verify $tgz --repo askalf/redstamp --bundle $bundle
+  if ($LASTEXITCODE -ne 0) { throw 'the provenance check failed: nothing was installed' }
 
   npm install -g $tgz
-  if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE)" }
-} catch {
-  $failed = $_.Exception.Message
+  if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
+
+  npm ls -g --depth=0 '@askalf/redstamp'
+  Write-Host 'done - try: redstamp init'
 } finally {
-  Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+  Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
 }
-
-if ($failed) {
-  [Console]::Error.WriteLine("redstamp: $failed")
-  exit 1
-}
-
-npm ls -g --depth=0 '@askalf/redstamp'
-Write-Host 'done - try: redstamp init'

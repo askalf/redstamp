@@ -11,7 +11,7 @@ gh attestation verify redstamp.tgz --repo askalf/redstamp --bundle redstamp.tgz.
 npm i -g ./redstamp.tgz
 ```
 
-Or the one-line global install (same signed artifact, verification handled for you):
+Or the one-line global install. It runs the same steps: it downloads the signed artifact, checks it with `gh attestation verify`, and hands only that checked file to npm. It needs the [GitHub CLI](https://cli.github.com), and a failed check installs nothing:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/askalf/redstamp/master/install/redstamp.sh | sh
