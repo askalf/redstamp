@@ -27,7 +27,8 @@ try {
   Invoke-WebRequest -UseBasicParsing -Uri "$base/redstamp.tgz" -OutFile $tgz
   Invoke-WebRequest -UseBasicParsing -Uri "$base/redstamp.tgz.sigstore.json" -OutFile $bundle
 
-  # A native command's exit status never stops the script on its own, so each one is checked here.
+  # A native command's exit status never stops the script on its own, so the check and the install
+  # are tested here. The listing after them is best effort, as in the sh installer.
   Write-Host 'checking its provenance'
   gh attestation verify $tgz --repo askalf/redstamp --bundle $bundle
   if ($LASTEXITCODE -ne 0) { throw 'the provenance check failed: nothing was installed' }

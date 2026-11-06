@@ -28,7 +28,7 @@ function runSh({ tools = ['curl', 'gh', 'npm'], curl = 0, gh = 0, npm = 0 } = {}
   stub('mktemp', `echo "${shPath(dir)}"`);
   stub('rm', 'exit 0');
   const script = shPath(path.join(ROOT, 'install', 'redstamp.sh'));
-  const res = spawnSync('sh', ['-c', 'PATH="$1"; . "$2"', 'install-test', shPath(dir), script], { encoding: 'utf8' });
+  const res = spawnSync('sh', ['-c', 'PATH="$STUB_PATH"; . "$STUB_SCRIPT"'], { encoding: 'utf8', env: { ...process.env, STUB_PATH: shPath(dir), STUB_SCRIPT: script } });
   const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
   fs.rmSync(dir, { recursive: true, force: true });
   return { status: res.status, calls, out: res.stdout + res.stderr };
