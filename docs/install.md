@@ -11,14 +11,14 @@ gh attestation verify redstamp.tgz --repo askalf/redstamp --bundle redstamp.tgz.
 npm i -g ./redstamp.tgz
 ```
 
-Or the one-line global install (same signed artifact, verification handled for you):
+Or the one-line global install. It runs the same steps: it downloads the signed artifact, checks it with `gh attestation verify`, and hands only that checked file to npm. It needs the [GitHub CLI](https://cli.github.com), and a failed check installs nothing:
 
 ```sh
-curl -fsSL https://ownyourstack.sprayberrylabs.com/redstamp.sh | sh
+curl -fsSL https://raw.githubusercontent.com/askalf/redstamp/master/install/redstamp.sh | sh
 ```
 
 ```powershell
-powershell -c "irm https://ownyourstack.sprayberrylabs.com/redstamp.ps1 | iex"
+powershell -c "irm https://raw.githubusercontent.com/askalf/redstamp/master/install/redstamp.ps1 | iex"
 ```
 
 Every tarball is packed in CI and signed with keyless Sigstore. A security tool shouldn't ask for blind trust — that's why the verify step comes *before* the install, not after.

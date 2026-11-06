@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed: the one-line installers check provenance before installing
+
+`install/redstamp.sh` and `install/redstamp.ps1` now live in this repository. Both
+download the release tarball, run `gh attestation verify` on it, and hand only that
+checked file to npm, so a failed check installs nothing. They need the GitHub CLI.
+Before, they passed the release URL straight to npm, and the PowerShell one printed
+success even when `npm install` failed.
+
 ### Added: the audit records what was enforced, and whether the call ran (#219)
 
 An `approve` record did not say what happened next: `redstamp-mcp` refuses it

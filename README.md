@@ -156,4 +156,4 @@ The highest-value contributions are **adversarial**: corpus samples that break t
 
 ---
 
-Part of **[Own Your Agent Security](https://ownyourstack.sprayberrylabs.com)**: own your AI infrastructure instead of renting it by the token. Built by Thomas Sprayberry · MIT.
+Part of **Own Your Agent Security**: own your AI infrastructure instead of renting it by the token. Built by Thomas Sprayberry · MIT.

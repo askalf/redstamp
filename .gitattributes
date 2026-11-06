@@ -8,3 +8,4 @@ arena/RESULTS.md    text eol=lf
 arena/external-corpus.json          text eol=lf
 arena/external-corpus-results.json  text eol=lf
 arena/EXTERNAL-CORPUS-RESULTS.md    text eol=lf
+install/*.sh text eol=lf
