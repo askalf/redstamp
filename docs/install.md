@@ -14,11 +14,11 @@ npm i -g ./redstamp.tgz
 Or the one-line global install (same signed artifact, verification handled for you):
 
 ```sh
-curl -fsSL https://ownyourstack.sprayberrylabs.com/redstamp.sh | sh
+curl -fsSL https://raw.githubusercontent.com/askalf/redstamp/main/install/redstamp.sh | sh
 ```
 
 ```powershell
-powershell -c "irm https://ownyourstack.sprayberrylabs.com/redstamp.ps1 | iex"
+powershell -c "irm https://raw.githubusercontent.com/askalf/redstamp/main/install/redstamp.ps1 | iex"
 ```
 
 Every tarball is packed in CI and signed with keyless Sigstore. A security tool shouldn't ask for blind trust — that's why the verify step comes *before* the install, not after.
