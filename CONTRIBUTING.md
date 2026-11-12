@@ -4,7 +4,7 @@ Thanks for your interest in improving **redstamp** — a deterministic, offline
 firewall for AI-agent tool calls: green/yellow/red/black risk tiers, secret-exfil
 and prompt-injection blocking, and a tamper-evident audit trail, plus **arena**,
 an open agent-firewall benchmark. It runs as a Claude Code hook or an MCP proxy.
-Part of [Own Your Agent Security](https://sprayberrylabs.com).
+Part of [Own Your Stack](https://github.com/askalf).
 
 ## Ground rules
 
